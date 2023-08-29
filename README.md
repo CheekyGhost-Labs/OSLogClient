@@ -1,6 +1,8 @@
 # OSLogClient
 Utility class that polls OSLogStore and sends any valid logs to subscribed log drivers.
 
+[![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FCheekyGhost-Labs%2FOSLogClient%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/CheekyGhost-Labs/OSLogClient) [![](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2FCheekyGhost-Labs%2FOSLogClient%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/CheekyGhost-Labs/OSLogClient)
+
 ## Why? (Problem Statement)
 
 `OSLog` is the recommended logging approach by Apple and the core Swift team. A comprehensive and reliable logging system is essential in software development. However, projects often need to send logs to third-party vendors or other services. This presents a challenge: how to use `OSLog` while also ensuring seamless and flexible integration with external logging solutions.
