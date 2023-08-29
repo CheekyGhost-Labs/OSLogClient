@@ -26,6 +26,9 @@ actor LogPoller {
 
     /// Logger instance for any console output.
     private(set) var logger: Logger
+    
+    /// A template predicate used while polling logs
+    private var datePredicate: NSPredicate?
 
     // MARK: - Properties: Computed
     
@@ -82,7 +85,11 @@ actor LogPoller {
         do {
             var predicate: NSPredicate?
             if let lastProcessed {
-                predicate = NSPredicate.init(format: "date > %@", argumentArray: [lastProcessed])
+                if datePredicate == nil {
+                    datePredicate = NSPredicate(format: "date > $DATE")
+                }
+                
+                predicate = datePredicate?.withSubstitutionVariables(["DATE": lastProcessed])
             }
             let items = try logStore.getEntries(matching: predicate).compactMap(validateLogEntry)
             let sortedItems = items.sorted(by: { $0.date <= $1.date })
