@@ -17,9 +17,6 @@ class LogClient {
     /// Internal logger for any console output.
     var logger: Logger = Logger(subsystem: "com.cheekyghost.OSLogClient", category: "client")
 
-    /// Internal polling timer used to invoke `OSLogStore` lookups.
-    var pollingTimer: Timer?
-
     /// The current polling interval
     var pollingInterval: PollingInterval {
         didSet {

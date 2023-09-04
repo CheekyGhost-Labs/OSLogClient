@@ -66,12 +66,12 @@ While the base LogDriver class provides the necessary foundation for handling OS
 class FileLogDriver: LogDriver {
     let logFilePath: String
     
-    init(id: String, subsystem: String, logSources: [LogSource] = []) {
+    init(id: String, logSources: [LogSource] = []) {
         self.logFilePath = logFilePath
         super.init(id: id, logSources: logSources)
     }
     
-    override func processLog(level: LogLevel, category: String, date: Date, message: String) {
+    override func processLog(level: LogLevel, subsystem: String, category: String, date: Date, message: String) {
         let logMessage = "[\(date)] [\(level)] [\(category)] \(message)\n"
         if let data = logMessage.data(using: .utf8) {
             try? data.append(to: fileURL)
@@ -124,10 +124,12 @@ This approach facilitates managing loggers with varied categories across distinc
 
 The `PollingInterval` supports four enumerations:
 
-- `short` - 10 second intervals
-- `medium` - 30 second intervals
-- `long` - 60 second intervals
-- `custom(TimeInterval)` - where `TimeInterval` is the duration in seconds you want to poll at
+```swift
+.short // 10 second intervals
+.medium // 30 second intervals
+.long // 60 second intervals
+.custom(TimeInterval) // Poll at the given duration (in seconds)
+```
 
 **Note:** There is a hard-enforced minimum of 1 second for the `custom` interval option.
 
@@ -138,7 +140,7 @@ Currently, OSLogClient supports Swift Package Manager (SPM).
 To add OSLogClient to your project, add the following line to your dependencies in your Package.swift file:
 
 ```swift
-.package(url: "https://github.com/CheekyGhost-Labs/OSLogClient", from: "0.1.0")
+.package(url: "https://github.com/CheekyGhost-Labs/OSLogClient", from: "0.1.2")
 ```
 
 Then, add OSLogClient as a dependency for your target:
