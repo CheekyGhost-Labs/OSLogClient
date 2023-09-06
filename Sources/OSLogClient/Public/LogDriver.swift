@@ -10,8 +10,7 @@ import OSLog
 
 /// `LogDriver` instances are responsible for handling processed os logs.
 /// Instances, when registered with the ``OSLogClient`` instance, will be sent logs from the `OSLogStore`.
-/// The ``OSLogClient`` will filter out logs whose `subsystem` value does not match the ``LogDriver/subsystem`` and
-/// where the ``LogDriver/categories`` array does not contain the log `category`.
+/// If  ``LogDriver/LogSource`` enums are provided, any incoming logs will be assessed against the log source rules and ignored if no matches are found.
 open class LogDriver: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
 
     // MARK: - Supplementary
