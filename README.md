@@ -63,22 +63,46 @@ when your driver gets the log message, it will be the processed message that ens
 While the base LogDriver class provides the necessary foundation for handling OS logs, you can easily subclass it for custom processing, such as writing logs to a text file:
 
 ```swift
-class FileLogDriver: LogDriver {
-    let logFilePath: String
-    
-    init(id: String, logSources: [LogSource] = []) {
-        self.logFilePath = logFilePath
+import OSLogClient
+
+class TextLogDriver: LogDriver {
+
+    // MARK: - Properties
+
+    var logFileUrl: URL
+
+    // MARK: - Lifecycle
+
+    required init(id: String, logFileUrl: URL, logSources: [LogSource] = []) {
+        self.logFileUrl = logFileUrl
         super.init(id: id, logSources: logSources)
     }
     
-    override func processLog(level: LogLevel, subsystem: String, category: String, date: Date, message: String) {
-        let logMessage = "[\(date)] [\(level)] [\(category)] \(message)\n"
-        if let data = logMessage.data(using: .utf8) {
-            try? data.append(to: fileURL)
-        }
+    required init(id: String, logSources: [LogDriver.LogSource] = []) {
+        fatalError("init(id:logSources:) has not been implemented")
+    }
+
+    // MARK: - Overrides
+
+    #if os(macOS)
+    override func processLog(level: LogDriver.LogLevel, subsystem: String, category: String, date: Date, message: String, components: [OSLogMessageComponent]) {
+        formatAndWriteMessage(level: level, category: category, date: date, message: message)
+    }
+    #else
+    override func processLog(level: LogDriver.LogLevel, subsystem: String, category: String, date: Date, message: String) {
+        formatAndWriteMessage(level: level, category: category, date: date, message: message)
+    }
+    #endif
+
+    // MARK: - Helpers
+
+    func formatAndWriteMessage(level: LogLevel, category: String, date: Date, message: String) {
+      let message = "[\(category)-\(level.rawValue.uppercased())]: \(date): \(message)"
+      var contents = (try? String(contentsOf: logFileUrl).trimmingCharacters(in: .whitespacesAndNewlines)) ?? ""
+      contents += "\(contents.isEmpty ? "" : "\n")\(message)"
+      try? contents.write(to: logFileUrl, atomically: true, encoding: .utf8)
     }
 }
-
 ```
 
 ## Filtering Logs with LogSource Filters
@@ -100,10 +124,10 @@ let uiLogger = Logger(subsystem: "com.company.AppName", category: "ui")
 let storageLogger = Logger(subsystem: "com.vendor.AppName", category: "storage")
 
 myLogDriver.addLogSources([
-    .subsystemAndCategories(
-        subsystem: "com.company.AppName",
-        categories: ["ui", "api"]
-    ),
+  .subsystemAndCategories(
+    subsystem: "com.company.AppName",
+    categories: ["ui", "api"]
+  )
 ])
 ```
 
