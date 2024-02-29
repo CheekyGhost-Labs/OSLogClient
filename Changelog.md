@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- [Fix privacy manifest not declaring UserDefaults usage](https://github.com/CheekyGhost-Labs/OSLogClient/pull/8)
+
+## [0.2.0] - 2024-05-01
+
+### Changed
+
 - Added privacy manifest in resources bundle
 
 ## [0.1.2] - 2023-04-09

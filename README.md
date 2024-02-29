@@ -66,13 +66,13 @@ While the base LogDriver class provides the necessary foundation for handling OS
 import OSLogClient
 
 class TextLogDriver: LogDriver {
-
+	
     // MARK: - Properties
-
+	
     var logFileUrl: URL
-
+	
     // MARK: - Lifecycle
-
+	
     required init(id: String, logFileUrl: URL, logSources: [LogSource] = []) {
         self.logFileUrl = logFileUrl
         super.init(id: id, logSources: logSources)
@@ -81,9 +81,9 @@ class TextLogDriver: LogDriver {
     required init(id: String, logSources: [LogDriver.LogSource] = []) {
         fatalError("init(id:logSources:) has not been implemented")
     }
-
+	
     // MARK: - Overrides
-
+	
     #if os(macOS)
     override func processLog(level: LogDriver.LogLevel, subsystem: String, category: String, date: Date, message: String, components: [OSLogMessageComponent]) {
         formatAndWriteMessage(level: level, category: category, date: date, message: message)
@@ -93,9 +93,9 @@ class TextLogDriver: LogDriver {
         formatAndWriteMessage(level: level, category: category, date: date, message: message)
     }
     #endif
-
+	
     // MARK: - Helpers
-
+	
     func formatAndWriteMessage(level: LogLevel, category: String, date: Date, message: String) {
       let message = "[\(category)-\(level.rawValue.uppercased())]: \(date): \(message)"
       var contents = (try? String(contentsOf: logFileUrl).trimmingCharacters(in: .whitespacesAndNewlines)) ?? ""
