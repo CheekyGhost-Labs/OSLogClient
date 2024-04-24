@@ -72,7 +72,7 @@ class LogClient {
         await logPoller.registerDriver(driver)
     }
 
-    /// Will deregister the driver with the given identifier from receiving an logs.
+    /// Will deregister the driver with the given identifier from receiving any logs.
     /// - Parameter id: The id of the driver to deregister.
     func deregisterDriver(withId id: String) async {
         await logPoller.deregisterDriver(withId: id)
