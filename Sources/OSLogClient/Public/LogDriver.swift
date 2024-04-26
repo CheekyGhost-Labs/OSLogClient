@@ -11,7 +11,7 @@ import OSLog
 /// `LogDriver` instances are responsible for handling processed os logs.
 /// Instances, when registered with the ``OSLogClient`` instance, will be sent logs from the `OSLogStore`.
 /// If  ``LogDriver/LogSource`` enums are provided, any incoming logs will be assessed against the log source rules and ignored if no matches are found.
-open class LogDriver: Equatable, CustomStringConvertible, CustomDebugStringConvertible {
+open class LogDriver: Equatable {
 
     // MARK: - Supplementary
 
@@ -167,15 +167,5 @@ open class LogDriver: Equatable, CustomStringConvertible, CustomDebugStringConve
 
     public static func == (lhs: LogDriver, rhs: LogDriver) -> Bool {
         lhs.id == rhs.id
-    }
-
-    // MARK: - CustomStringConvertible
-
-    public var description: String {
-        "\(String(describing: self))<\(id)>"
-    }
-
-    public var debugDescription: String {
-        description
     }
 }

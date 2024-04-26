@@ -13,7 +13,7 @@ public enum PollingInterval: Equatable {
     case short
     /// Represents an interval of 30 seconds
     case medium
-    /// Represents an interval of 30 seconds
+    /// Represents an interval of 60 seconds
     case long
     /// Represents a custom polling interval (in seconds)
     ///

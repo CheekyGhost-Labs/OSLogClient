@@ -58,6 +58,8 @@ when your driver gets the log message, it will be the processed message that ens
 
 - `"Password '<private>' did not pass validation"`
 
+## Managing your own LogClient instance:
+
 ## Subclassing LogDriver:
 
 While the base LogDriver class provides the necessary foundation for handling OS logs, you can easily subclass it for custom processing, such as writing logs to a text file:
@@ -157,6 +159,15 @@ The `PollingInterval` supports four enumerations:
 
 **Note:** There is a hard-enforced minimum of 1 second for the `custom` interval option.
 
+## On-demand Poll:
+
+You can also request a poll of logs from a given point in time. The date to poll from is optional and defaults to time of the most recently polled log:
+
+```swift
+OSLogClient.pollImmediately() // Use last processed
+OSLogClient.pollImmediately(from: customDate) // Custom point in time
+```
+
 ## Installation
 
 Currently, OSLogClient supports Swift Package Manager (SPM).
@@ -164,7 +175,7 @@ Currently, OSLogClient supports Swift Package Manager (SPM).
 To add OSLogClient to your project, add the following line to your dependencies in your Package.swift file:
 
 ```swift
-.package(url: "https://github.com/CheekyGhost-Labs/OSLogClient", from: "0.2.0")
+.package(url: "https://github.com/CheekyGhost-Labs/OSLogClient", from: "0.3.0")
 ```
 
 Then, add OSLogClient as a dependency for your target:
