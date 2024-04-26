@@ -81,15 +81,17 @@ actor LogPoller {
     }
 
     /// Will poll logs since the last processed time position and send to any registered drivers for validation and processing.
-    func pollLatestLogs() {
+    /// - Parameter date: Optional date to request logs from. Leave this `nil` to default to the `lastProcessed` property.
+    func pollLatestLogs(from date: Date? = nil) {
         do {
             var predicate: NSPredicate?
-            if let lastProcessed {
+            let fromDate = date ?? lastProcessed
+            if let fromDate {
                 if datePredicate == nil {
                     datePredicate = NSPredicate(format: "date > $DATE")
                 }
                 
-                predicate = datePredicate?.withSubstitutionVariables(["DATE": lastProcessed])
+                predicate = datePredicate?.withSubstitutionVariables(["DATE": fromDate])
             }
             let items = try logStore.getEntries(matching: predicate).compactMap(validateLogEntry)
             let sortedItems = items.sorted(by: { $0.date <= $1.date })
