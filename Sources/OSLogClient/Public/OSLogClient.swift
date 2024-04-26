@@ -10,22 +10,22 @@ import Foundation
 
 /// Class that provides configurable polling of an `OSLogStore`.
 /// Valid log items will be sent to any registered ``LogDriver`` instances.
-///
+/// 
 /// Example usage:
 /// ```swift
 /// try OSLogClient.initialize(pollingInterval: .short)
 /// OSLogClient.registerDriver(driverSubclass)
 /// OSLogClient.startPolling()
 /// ```
-///
+/// 
 /// - You must initialize the utility using the ``OSLogClient/initialize(pollingInterval:logStore:)`` method **before use**. Failure
 /// to do this will result in a fatal error being thrown.
-///
+/// 
 /// - You can register ``LogDriver`` instances via the ``OSLogClient/registerDriver(_:)`` method.
-///
+/// 
 /// - By default polling will not automatically start, once you have finished setting up and registering drivers, you can start and stop
 /// polling by using the ``OSLogClient/startPolling()`` and ``OSLogClient/stopPolling()`` methods.
-///
+/// 
 public final class OSLogClient {
 
     // MARK: - Internal
@@ -86,6 +86,15 @@ public final class OSLogClient {
     /// Will stop polling logs.
     public static func stopPolling() {
         client.stopPolling()
+    }
+    
+    /// Will force an immediate poll of logs on a detached task. The same log processing and broadcasting to drivers will
+    /// occur as per the interval based polling.
+    ///
+    /// **Note:** This does not reset, delay, or otherwise alter the current polling interval (or scheduled tasks)
+    /// - Parameter date: Optional date to query from. Leave `nil` to query from the last time logs were polled (default behaviour).
+    public static func pollImmediately(from date: Date? = nil) {
+        client.forcePoll(from: date)
     }
 
     /// Will register the given driver instance to receive any polled logs.

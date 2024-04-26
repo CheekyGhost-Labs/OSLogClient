@@ -172,7 +172,7 @@ open class LogDriver: Equatable, CustomStringConvertible, CustomDebugStringConve
     // MARK: - CustomStringConvertible
 
     public var description: String {
-        "\(String(describing: self))<\(id)>"
+        "\(self)<\(id)>"
     }
 
     public var debugDescription: String {
