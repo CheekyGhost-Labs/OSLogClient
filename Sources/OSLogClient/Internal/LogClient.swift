@@ -17,7 +17,8 @@ class LogClient {
     /// Internal logger for any console output.
     var logger: Logger = Logger(subsystem: "com.cheekyghost.OSLogClient", category: "client")
 
-    /// The current polling interval
+    /// The current polling interval. Defaults to ``PollingInterval/medium``
+    /// - See: ``PollingInterval``
     var pollingInterval: PollingInterval {
         didSet {
             pendingPollTask?.cancel()
@@ -37,9 +38,14 @@ class LogClient {
     /// Bool whether polling is currently active or not.
     var isPollingEnabled: Bool = false
 
+    /// Mapping of unique id's to a transient tasks created when the `forcePoll` is called.
+    /// These are managed for unit testing and potential future contexts (invalidation, cancelling etc)
+    /// A task is removed once it has completed.
+    var immediatePollTaskMap: [UUID: Task<(), Error>] = [:]
+
     // MARK: - Lifecycle
 
-    init(pollingInterval: PollingInterval, logStore: OSLogStore? = nil) throws {
+    required init(pollingInterval: PollingInterval = .medium, logStore: OSLogStore? = nil) throws {
         let store = try (logStore ?? OSLogStore(scope: .currentProcessIdentifier))
         self.logPoller = LogPoller(logStore: store, logger: logger)
         self.pollingInterval = pollingInterval
@@ -47,6 +53,7 @@ class LogClient {
 
     deinit {
         pendingPollTask?.cancel()
+        immediatePollTaskMap.forEach { $0.value.cancel() }
     }
 
     // MARK: - Helpers: Internal
@@ -64,15 +71,26 @@ class LogClient {
         pendingPollTask = nil
     }
 
+    /// Indicates whether a driver with a specified identifier is registered.
+    /// - Parameter id: The id of the driver.
+    /// - Returns: A `Bool` indicating whether the a driver with the specified identifier is registered.
+    func isDriverRegistered(withId id: String) async -> Bool {
+        await logPoller.isDriverRegistered(withId: id)
+    }
+
     /// Will register the given driver instance to receive any polled logs.
     ///
     /// **Note:** The client will hold a strong reference to the driver instance.
-    /// - Parameter driver: The driver to register
+    /// - Parameter driver: The driver to register.
     func registerDriver(_ driver: LogDriver) async {
         await logPoller.registerDriver(driver)
+        // If polling is enabled, but no pending task due to previously empty drivers, can start the polling up again
+        if isPollingEnabled, pendingPollTask == nil {
+            executePoll()
+        }
     }
 
-    /// Will deregister the driver with the given identifier from receiving an logs.
+    /// Will deregister the driver with the given identifier from receiving any logs.
     /// - Parameter id: The id of the driver to deregister.
     func deregisterDriver(withId id: String) async {
         await logPoller.deregisterDriver(withId: id)
@@ -80,6 +98,20 @@ class LogClient {
             pendingPollTask?.cancel()
             pendingPollTask = nil
         }
+    }
+
+    /// Will force an immediate poll of logs on a detached task.
+    /// **Note:** This does not reset or otherwise alter the current interval driven polling.
+    /// - Parameter date: Optional date to query from. Leave `nil` to query from the last time logs were polled (default behaviour).
+    func forcePoll(from date: Date? = nil) {
+        // Generate task
+        let taskId: UUID = .init()
+        let pollTask: Task<(), Error> = Task.detached(priority: .userInitiated) { [weak self, taskId] in
+            guard let self else { return }
+            await self.logPoller.pollLatestLogs(from: date)
+            self.immediatePollTaskMap.removeValue(forKey: taskId)
+        }
+        immediatePollTaskMap[taskId] = pollTask
     }
 
     /// Will execute the poll operation on the log poller instance.

@@ -73,6 +73,18 @@ final class LogClientTests: XCTestCase {
         XCTAssertNil(instanceUnderTest.pendingPollTask)
     }
 
+    func test_isDriverRegistered_withRegisteredDriver_willReturnTrue() async {
+        let driverSpy = LogDriverSpy(id: "test")
+        await instanceUnderTest.registerDriver(driverSpy)
+        let isRegistered = await instanceUnderTest.isDriverRegistered(withId: "test")
+        XCTAssertTrue(isRegistered)
+    }
+
+    func test_isDriverRegistered_withUnregisteredDriver_willReturnFalse() async {
+        let isRegistered = await instanceUnderTest.isDriverRegistered(withId: "test")
+        XCTAssertFalse(isRegistered)
+    }
+
     func test_registerDriver_notPresent_willAddToDriversArray() async {
         let driverSpy = LogDriverSpy(id: "test")
         await instanceUnderTest.registerDriver(driverSpy)
@@ -139,5 +151,34 @@ final class LogClientTests: XCTestCase {
         instanceUnderTest.executePollShouldForwardToSuper = true
         instanceUnderTest.executePoll()
         XCTAssertNil(instanceUnderTest.pendingPollTask)
+    }
+
+    func test_forcePoll_pollingEnabled_willAssignPollTask() throws {
+        instanceUnderTest.isPollingEnabled = true
+        instanceUnderTest.forcePollShouldForwardToSuper = true
+        XCTAssertEqual(instanceUnderTest.immediatePollTaskMap.count, 0)
+        instanceUnderTest.forcePoll()
+        XCTAssertEqual(instanceUnderTest.immediatePollTaskMap.count, 1)
+    }
+
+    func test_forcePoll_pollingDisabled_willAssignPollTask() throws {
+        instanceUnderTest.isPollingEnabled = false
+        instanceUnderTest.forcePollShouldForwardToSuper = true
+        XCTAssertEqual(instanceUnderTest.immediatePollTaskMap.count, 0)
+        instanceUnderTest.forcePoll()
+        XCTAssertEqual(instanceUnderTest.immediatePollTaskMap.count, 1)
+    }
+
+    func test_forcePoll_pollingTaskScheduled_willNotEffectPendingPollTask() throws {
+        instanceUnderTest.isPollingEnabled = true
+        instanceUnderTest.executePollShouldForwardToSuper = true
+        instanceUnderTest.forcePollShouldForwardToSuper = true
+        instanceUnderTest.startPolling()
+        let pendingTask = try XCTUnwrap(instanceUnderTest.pendingPollTask)
+        XCTAssertEqual(instanceUnderTest.immediatePollTaskMap.count, 0)
+        instanceUnderTest.forcePoll()
+        XCTAssertEqual(instanceUnderTest.immediatePollTaskMap.count, 1)
+        XCTAssertNotNil(instanceUnderTest.pendingPollTask)
+        XCTAssertEqual(instanceUnderTest.pendingPollTask, pendingTask)
     }
 }

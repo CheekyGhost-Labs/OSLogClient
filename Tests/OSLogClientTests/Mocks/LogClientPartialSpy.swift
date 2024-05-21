@@ -21,6 +21,20 @@ class LogClientPartialSpy: LogClient {
         }
     }
 
+    var forcePollCalled: Bool { forcePollCallCount > 0 }
+    var forcePollCallCount: Int = 0
+    var forcePollParameters: (date: Date?, Void)? { forcePollParameterList.last }
+    var forcePollParameterList: [(date: Date?, Void)] = []
+    var forcePollShouldForwardToSuper: Bool = false
+
+    override func forcePoll(from date: Date? = nil) {
+        forcePollCallCount += 1
+        forcePollParameterList.append((date: date, ()))
+        if forcePollShouldForwardToSuper {
+            super.forcePoll(from: date)
+        }
+    }
+
     var registerDriverCalled: Bool { registerDriverCallCount > 0 }
     var registerDriverCallCount: Int = 0
     var registerDriverParameters: (driver: LogDriver, Void)? { registerDriverParameterList.last }
