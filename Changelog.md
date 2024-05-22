@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2024-23-05
+
+- Feature: Making LogDriver ID public by [@nickkohrn in #13](https://github.com/CheekyGhost-Labs/OSLogClient/pull/14)
+- Feature: Adding check for whether driver is registered by [@nickkohrn in #13](https://github.com/CheekyGhost-Labs/OSLogClient/pull/13)
+
+
+## [0.3.0] - 2024-26-04
+
+### Changed
+
+- Fixed Minor Typo in LogClient Method Documentation by [@nickkohrn in #10](https://github.com/CheekyGhost-Labs/OSLogClient/pull/10)
+- Added force/immediate polling convenience helper
+
 ## [0.2.0] - 2024-05-01
 
 ### Changed
