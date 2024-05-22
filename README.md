@@ -175,7 +175,7 @@ Currently, OSLogClient supports Swift Package Manager (SPM).
 To add OSLogClient to your project, add the following line to your dependencies in your Package.swift file:
 
 ```swift
-.package(url: "https://github.com/CheekyGhost-Labs/OSLogClient", from: "0.3.0")
+.package(url: "https://github.com/CheekyGhost-Labs/OSLogClient", from: "0.4.0")
 ```
 
 Then, add OSLogClient as a dependency for your target:

@@ -71,10 +71,17 @@ class LogClient {
         pendingPollTask = nil
     }
 
+    /// Indicates whether a driver with a specified identifier is registered.
+    /// - Parameter id: The id of the driver.
+    /// - Returns: A `Bool` indicating whether the a driver with the specified identifier is registered.
+    func isDriverRegistered(withId id: String) async -> Bool {
+        await logPoller.isDriverRegistered(withId: id)
+    }
+
     /// Will register the given driver instance to receive any polled logs.
     ///
     /// **Note:** The client will hold a strong reference to the driver instance.
-    /// - Parameter driver: The driver to register
+    /// - Parameter driver: The driver to register.
     func registerDriver(_ driver: LogDriver) async {
         await logPoller.registerDriver(driver)
         // If polling is enabled, but no pending task due to previously empty drivers, can start the polling up again

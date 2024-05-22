@@ -56,12 +56,19 @@ actor LogPoller {
         self.logger = logger
     }
 
+    /// Indicates whether a driver with a specified identifier is registered.
+    /// - Parameter id: The id of the driver.
+    /// - Returns: A `Bool` indicating whether the a driver with the specified identifier is registered.
+    func isDriverRegistered(withId id: String) -> Bool {
+        drivers.contains(where: { $0.id == id })
+    }
+
     /// Will register the given driver instance to receive any polled logs.
     ///
     /// - Parameter driver: The driver to register
     func registerDriver(_ driver: LogDriver) {
-        guard !drivers.contains(where: { $0.id ==  driver.id }) else {
-            logger.error("Driver instance with id `\(driver.id)` is already registered.")
+        guard !isDriverRegistered(withId: driver.id) else {
+            logger.error("Driver instance with id `\(driver.id)` is already registered; consider checking whether a driver is already registered by invoking `LogPoller.isDriverRegistered(withId:)` before invoking `LogPoller.registerDriver(_:)`.")
             return
         }
         drivers.append(driver)

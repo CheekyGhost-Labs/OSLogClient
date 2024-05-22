@@ -73,6 +73,18 @@ final class LogClientTests: XCTestCase {
         XCTAssertNil(instanceUnderTest.pendingPollTask)
     }
 
+    func test_isDriverRegistered_withRegisteredDriver_willReturnTrue() async {
+        let driverSpy = LogDriverSpy(id: "test")
+        await instanceUnderTest.registerDriver(driverSpy)
+        let isRegistered = await instanceUnderTest.isDriverRegistered(withId: "test")
+        XCTAssertTrue(isRegistered)
+    }
+
+    func test_isDriverRegistered_withUnregisteredDriver_willReturnFalse() async {
+        let isRegistered = await instanceUnderTest.isDriverRegistered(withId: "test")
+        XCTAssertFalse(isRegistered)
+    }
+
     func test_registerDriver_notPresent_willAddToDriversArray() async {
         let driverSpy = LogDriverSpy(id: "test")
         await instanceUnderTest.registerDriver(driverSpy)
