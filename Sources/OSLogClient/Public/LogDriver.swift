@@ -63,7 +63,7 @@ open class LogDriver: Equatable {
     // MARK: - Properties
 
     /// Unique identifier for the driver.
-    let id: String
+    public let id: String
     
     /// Array of log sources to restrict logs sent to the `processLog(...)` method.
     ///
