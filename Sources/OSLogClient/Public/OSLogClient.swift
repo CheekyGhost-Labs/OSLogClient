@@ -56,13 +56,25 @@ public final class OSLogClient {
         }
     }
 
-    /// Internal polling timer used to invoke `OSLogStore` lookups.
+    /// The current polling interval.
+    /// - See: ``PollingInterval``
     public static var pollingInterval: PollingInterval {
-        get {
-            client.pollingInterval
+        get async {
+            await client.pollingInterval
         }
-        set {
-            client.pollingInterval = newValue
+    }
+
+    /// Bool whether polling is currently active or not.
+    public static var isPolling: Bool {
+        get async {
+            await client.isPollingEnabled
+        }
+    }
+
+    /// The most recent date-time of a processed/polled log
+    public static var lastPolledDate: Date? {
+        get async {
+            await client.lastPolledDate
         }
     }
 
@@ -71,23 +83,27 @@ public final class OSLogClient {
         _client != nil
     }
 
-    /// Will return `true` when the client is actively polling for logs.
-    ///
-    /// You can start/stop polling by invoking the ``OSLogClient/startPolling()`` and ``OSLogClient/stopPolling()`` methods.
-    public static var isPolling: Bool {
-        client.isPollingEnabled
-    }
+    // MARK: - Helpers
 
     /// Will start polling logs at the assigned interval.
-    public static func startPolling() {
-        client.startPolling()
+    public static func startPolling() async {
+        await client.startPolling()
     }
 
     /// Will stop polling logs.
-    public static func stopPolling() {
-        client.stopPolling()
+    public static func stopPolling() async {
+        await client.stopPolling()
     }
     
+    /// Will update the time between polls to the given interval.
+    ///
+    /// **Note:** If a poll is currently in-progress the interval will be applied once completed.
+    /// - Parameter interval: The interval to poll at
+    /// - SeeAlso: ``PollingInterval``
+    public static func setPollingInterval(_ interval: PollingInterval) async {
+        await client.setPollingInterval(interval)
+    }
+
     /// Will force an immediate poll of logs on a detached task. The same log processing and broadcasting to drivers will
     /// occur as per the interval based polling.
     ///
@@ -101,26 +117,24 @@ public final class OSLogClient {
     ///
     /// **Note:** The client will hold a strong reference to the driver instance.
     /// - Parameter driver: The driver to register
-    public static func registerDriver(_ driver: LogDriver) {
-        Task.detached(priority: .userInitiated) {
-            await client.registerDriver(driver)
-        }
+    public static func registerDriver(_ driver: LogDriver) async {
+        await client.registerDriver(driver)
     }
 
     /// Will register the given array of driver instances to receive any polled logs.
     ///
     /// **Note:** The client will hold a strong reference to the driver instances.
     /// - Parameter drivers: Array of ``LogDriver`` instances.
-    public static func registerDrivers(_ drivers: [LogDriver]) {
-        drivers.forEach(registerDriver(_:))
+    public static func registerDrivers(_ drivers: [LogDriver]) async {
+        await drivers.asyncForEach {
+            await registerDriver($0)
+        }
     }
 
     /// Will deregister the driver with the given identifier from receiving an logs.
     /// - Parameter id: The id of the driver to deregister.
-    public static func deregisterDriver(withId id: String) {
-        Task.detached(priority: .userInitiated) {
-            await client.deregisterDriver(withId: id)
-        }
+    public static func deregisterDriver(withId id: String) async {
+        await client.deregisterDriver(withId: id)
     }
 
     /// Indicates whether a driver with a specified identifier is registered.
