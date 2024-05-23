@@ -62,4 +62,20 @@ class LogClientPartialSpy: LogClient {
             await super.deregisterDriver(withId: id)
         }
     }
+
+    var isDriverRegisteredCalled: Bool { isDriverRegisteredCallCount > 0 }
+    var isDriverRegisteredCallCount: Int = 0
+    var isDriverRegisteredParameters: (id: String, Void)? { isDriverRegisteredParameterList.last }
+    var isDriverRegisteredParameterList: [(id: String, Void)] = []
+    var isDriverRegisteredResult: Bool = false
+    var isDriverRegisteredShouldForwardToSuper: Bool = false
+
+    override func isDriverRegistered(withId id: String) async -> Bool {
+        isDriverRegisteredCallCount += 1
+        isDriverRegisteredParameterList.append((id, ()))
+        if isDriverRegisteredShouldForwardToSuper {
+            return await super.isDriverRegistered(withId: id)
+        }
+        return isDriverRegisteredResult
+    }
 }
