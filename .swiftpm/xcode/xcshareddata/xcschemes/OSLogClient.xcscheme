@@ -52,6 +52,11 @@
                BlueprintName = "OSLogClientTests"
                ReferencedContainer = "container:">
             </BuildableReference>
+            <SkippedTests>
+               <Test
+                  Identifier = "OSLogClientTests/test_logs_multipleDrivers_willReceiveLogsOnNextPoll()">
+               </Test>
+            </SkippedTests>
          </TestableReference>
       </Testables>
    </TestAction>

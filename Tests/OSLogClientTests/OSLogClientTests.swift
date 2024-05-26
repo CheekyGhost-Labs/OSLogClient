@@ -73,6 +73,25 @@ final class OSLogClientTests: XCTestCase {
         XCTAssertFalse(OSLogClient.isPolling)
     }
 
+    func test_isDriverRegisteredWithId_willReturnFalse_whenDriverIsNotRegistered() async throws {
+        let clientSpy = try LogClientPartialSpy(pollingInterval: .custom(1))
+        OSLogClient._client = clientSpy
+        try await wait(for: 0.1)
+        let isRegistered = await clientSpy.isDriverRegistered(withId: logDriverSpy.id)
+        XCTAssertFalse(isRegistered)
+    }
+
+    func test_isDriverRegisteredWithId_willReturnTrue_whenDriverIsRegistered() async throws {
+        let clientSpy = try LogClientPartialSpy(pollingInterval: .custom(1))
+        clientSpy.registerDriverShouldForwardToSuper = true
+        clientSpy.isDriverRegisteredShouldForwardToSuper = true
+        OSLogClient._client = clientSpy
+        OSLogClient.registerDriver(logDriverSpy)
+        try await wait(for: 0.1)
+        let isRegistered = await clientSpy.isDriverRegistered(withId: logDriverSpy.id)
+        XCTAssertTrue(isRegistered)
+    }
+
     func test_registerDriver_willInvokeClient() async throws {
         let clientSpy = try LogClientPartialSpy(pollingInterval: .custom(1))
         OSLogClient._client = clientSpy
