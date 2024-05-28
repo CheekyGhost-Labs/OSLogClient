@@ -18,6 +18,7 @@ final class LogClientTests: XCTestCase {
 
     override func setUpWithError() throws {
         instanceUnderTest = try LogClientPartialSpy(pollingInterval: .custom(5))
+        instanceUnderTest.isDriverRegisteredShouldForwardToSuper = true
         instanceUnderTest.registerDriverShouldForwardToSuper = true
         instanceUnderTest.deregisterDriverShouldForwardToSuper = true
     }

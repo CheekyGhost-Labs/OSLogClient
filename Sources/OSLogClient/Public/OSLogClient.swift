@@ -122,4 +122,11 @@ public final class OSLogClient {
             await client.deregisterDriver(withId: id)
         }
     }
+
+    /// Indicates whether a driver with a specified identifier is registered.
+    /// - Parameter id: The id of the driver.
+    /// - Returns: A `Bool` indicating whether the a driver with the specified identifier is registered.
+    public static func isDriverRegistered(withId id: String) async -> Bool {
+        await client.isDriverRegistered(withId: id)
+    }
 }
