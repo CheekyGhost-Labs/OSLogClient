@@ -71,6 +71,17 @@ public final class OSLogClient {
         }
     }
 
+    /// Bool flag indicating whether polling should cease if there are no registered drivers.
+    ///
+    /// - Note: The inverse also applies, in that if drivers are registered polling will start again
+    /// if the ``OSLogClient/isPollingEnabled`` flag is `true`.
+    /// - Note: Default is `true`
+    public static var shouldPauseIfNoRegisteredDrivers: Bool {
+        get async {
+            await client.shouldPauseIfNoRegisteredDrivers
+        }
+    }
+
     /// The most recent date-time of a processed/polled log
     public static var lastPolledDate: Date? {
         get async {
@@ -142,5 +153,13 @@ public final class OSLogClient {
     /// - Returns: A `Bool` indicating whether the a driver with the specified identifier is registered.
     public static func isDriverRegistered(withId id: String) async -> Bool {
         await client.isDriverRegistered(withId: id)
+    }
+
+    /// Will assign the given Bool flag to the ``OSLogClient/shouldPauseIfNoRegisteredDrivers`` property.
+    ///
+    /// - Note: When `true` if all drivers are deregistered, polling will cease until valid drivers are registered again.
+    /// - Parameter flag: Bool whether enabled.
+    public static func setShouldPauseIfNoRegisteredDrivers(_ flag: Bool) async {
+        await client.setShouldPauseIfNoRegisteredDrivers(flag)
     }
 }

@@ -44,6 +44,11 @@ final class OSLogClientTests: XCTestCase {
         await XCTAssertEqual_async(logClientSpy.isPollingEnabledSpy.getterCallCount, 1)
     }
 
+    func test_setShouldPauseIfNoRegisteredDrivers_willInvokeUnderlyingClient() async {
+        _ = await OSLogClient.shouldPauseIfNoRegisteredDrivers
+        await XCTAssertEqual_async(logClientSpy.shouldPauseIfNoRegisteredDriversSpy.getterCallCount, 1)
+    }
+
     func test_lastPolledDate_willInvokeUnderlyingClient() async {
         _ = await OSLogClient.lastPolledDate
         await XCTAssertEqual_async(logClientSpy.lastPolledDateSpy.getterCallCount, 1)
@@ -110,5 +115,17 @@ final class OSLogClientTests: XCTestCase {
         _ = await OSLogClient.isDriverRegistered(withId: "test")
         await XCTAssertEqual_async(logClientSpy.isDriverRegisteredSpy_withId_boolOut.callCount, 1)
         await XCTAssertEqual_async(logClientSpy.isDriverRegisteredSpy_withId_boolOut.recentParameters?.id, "test")
+    }
+
+    func test_setShouldPauseIfNoRegisteredDrivers_true_willInvokeClientWithProvidedValue() async {
+        _ = await OSLogClient.setShouldPauseIfNoRegisteredDrivers(true)
+        await XCTAssertEqual_async(logClientSpy.setShouldPauseIfNoRegisteredDriversSpy_withFlag.callCount, 1)
+        await XCTAssertEqual_async(logClientSpy.setShouldPauseIfNoRegisteredDriversSpy_withFlag.recentParameters?.flag, true)
+    }
+
+    func test_setShouldPauseIfNoRegisteredDrivers_false_willInvokeClientWithProvidedValue() async {
+        _ = await OSLogClient.setShouldPauseIfNoRegisteredDrivers(false)
+        await XCTAssertEqual_async(logClientSpy.setShouldPauseIfNoRegisteredDriversSpy_withFlag.callCount, 1)
+        await XCTAssertEqual_async(logClientSpy.setShouldPauseIfNoRegisteredDriversSpy_withFlag.recentParameters?.flag, false)
     }
 }
