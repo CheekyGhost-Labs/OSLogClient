@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2024-28-05
+
+- [Feature] Add Driver Registration Check to OSLogClient [@nickkohrn in #15](https://github.com/CheekyGhost-Labs/OSLogClient/pull/15)
+
 ## [0.4.0] - 2024-23-05
 
 - Feature: Making LogDriver ID public by [@nickkohrn in #13](https://github.com/CheekyGhost-Labs/OSLogClient/pull/14)
