@@ -137,8 +137,8 @@ public final class OSLogClient {
     /// **Note:** The client will hold a strong reference to the driver instances.
     /// - Parameter drivers: Array of ``LogDriver`` instances.
     public static func registerDrivers(_ drivers: [LogDriver]) async {
-        await drivers.asyncForEach {
-            await registerDriver($0)
+        for driver in drivers {
+            await registerDriver(driver)
         }
     }
 
