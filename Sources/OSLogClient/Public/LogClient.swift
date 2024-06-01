@@ -69,7 +69,7 @@ public class LogClient {
     var pendingPollTask: Task<(), Error>?
 
     /// Mapping of unique id's to a transient tasks created when the `forcePoll` is called.
-    /// These are managed for unit testing and potential future contexts (invalidation, cancelling etc)
+    /// These are managed for unit testing and potential future contexts (invalidation, cancelling, etc.).
     /// A task is removed once it has completed.
     var immediatePollTaskMap: [UUID: Task<(), Error>] = [:]
 
