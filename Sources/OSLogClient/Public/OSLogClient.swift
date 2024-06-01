@@ -135,21 +135,24 @@ public final class OSLogClient {
     public static func setPollingInterval(_ interval: PollingInterval) async {
         // Resolve current settings
         let currentIsEnabled = await client.isEnabled
-        let currentLastProcessedStrategy = client.lastProcessedStrategy
-        let currentLastProcessedDate = await client.lastProcessedDate
-        let currentShouldPauseIfNoRegisteredDrivers = await client.shouldPauseIfNoRegisteredDrivers
-        let currentLogStore = client.logStore
         // Build new client instance
-        let newClient = LogClient(
+        let newClient = await LogClient(
             pollingInterval: interval,
-            lastProcessedStrategy: currentLastProcessedStrategy,
-            logStore: currentLogStore,
-            isEnabled: currentIsEnabled
+            drivers: client.drivers,
+            lastProcessedStrategy: client.lastProcessedStrategy,
+            logStore: client.logStore,
+            logger: client.logger,
+            processInfoEnvironmentProvider: client.processInfoEnvironmentProvider
         )
-        await newClient.setLastProcessedDate(currentLastProcessedDate)
-        await newClient.setShouldPauseIfNoRegisteredDrivers(currentShouldPauseIfNoRegisteredDrivers)
+        // Assign non-isolated
+        await newClient.setLastProcessedDate(client.lastProcessedDate)
+        await newClient.setShouldPauseIfNoRegisteredDrivers(client.shouldPauseIfNoRegisteredDrivers)
         // Assign new shared client
         _client = newClient
+        // Enable if was enabled previously
+        if currentIsEnabled {
+            await newClient.startPolling()
+        }
     }
 
     /// Will force an immediate poll of logs on a detached task. The same log processing and broadcasting to drivers will
@@ -158,7 +161,7 @@ public final class OSLogClient {
     /// **Note:** This does not reset, delay, or otherwise alter the current polling interval (or scheduled tasks)
     /// - Parameter date: Optional date to query from. Leave `nil` to query from the last time logs were polled (default behaviour).
     public static func pollImmediately(from date: Date? = nil) async {
-        await client.pollImmediately(from: date)
+        await client.pollLatestLogs(from: date)
     }
 
     // MARK: - Helpers: Drivers

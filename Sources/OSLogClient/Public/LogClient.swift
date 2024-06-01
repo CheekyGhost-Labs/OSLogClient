@@ -25,13 +25,17 @@ public actor LogClient {
     // MARK: - Properties: Settings
 
     /// Bool whether the poller is enabled.
-    public var isEnabled: Bool = false
+    /// - Note: Please use the ``LogClient/startPolling()`` and ``LogClient/stopPolling()`` to alter this value.
+    private(set) public var isEnabled: Bool = false
 
     /// Bool flag indicating whether polling should cease if there are no registered drivers.
     ///
+    /// Can be updated using the ``LogClient/setShouldPauseIfNoRegisteredDrivers(_:)`` method.
+    ///
+    /// - Note: When `true` if all drivers are deregistered, polling will cease until valid drivers are registered again.
     /// - Note: The inverse also applies, in that if drivers are registered polling will start again
     /// if the `isEnabled` flag is `true`.
-    public var shouldPauseIfNoRegisteredDrivers: Bool = true
+    private(set) public var shouldPauseIfNoRegisteredDrivers: Bool = true
 
     /// The most recent date-time of a processed/polled log
     private(set) public lazy var lastProcessedDate: Date? = loadLastProcessedDate()
@@ -47,7 +51,7 @@ public actor LogClient {
     let logStore: OSLogStore
 
     /// Internal logger for any console output.
-    let logger: Logger = Logger(subsystem: "com.cheekyghost.OSLogClient", category: "client")
+    let logger: Logger
 
     /// A template predicate used while polling logs
     let datePredicate: NSPredicate = NSPredicate(format: "date > $DATE")
@@ -58,40 +62,40 @@ public actor LogClient {
     /// This is managed so it can be cancelled if needed.
     var pendingPollTask: Task<(), Error>?
 
-    /// Mapping of unique id's to a transient tasks created when the `forcePoll` is called.
-    /// These are managed for unit testing and potential future contexts (invalidation, cancelling, etc.).
-    /// A task is removed once it has completed.
-    var immediatePollTaskMap: [UUID: Task<(), Error>] = [:]
-
     // MARK: - Lifecycle
 
     public init(
         pollingInterval: PollingInterval,
         lastProcessedStrategy: LastProcessedStrategy,
-        logStore: OSLogStore
+        logStore: OSLogStore,
+        logger: Logger? = nil
     ) {
         self.logStore = logStore
         self.pollingInterval = pollingInterval
         self.lastProcessedStrategy = lastProcessedStrategy
+        self.logger = logger ?? Logger(subsystem: "com.cheekyghost.OSLogClient", category: "client")
+        self.processInfoEnvironmentProvider = nil
     }
 
+    /// Internal init used when re-building a client instance from the static `OSLogClient` convenience entry point.
     init(
         pollingInterval: PollingInterval,
+        drivers: [LogDriver],
         lastProcessedStrategy: LastProcessedStrategy,
         logStore: OSLogStore,
-        isEnabled: Bool
+        logger: Logger? = nil,
+        processInfoEnvironmentProvider: ProcessInfoEnvironmentProvider? = nil
     ) {
         self.logStore = logStore
+        self.drivers = drivers
         self.pollingInterval = pollingInterval
         self.lastProcessedStrategy = lastProcessedStrategy
-        self.isEnabled = isEnabled
+        self.logger = logger ?? Logger(subsystem: "com.cheekyghost.OSLogClient", category: "client")
+        self.processInfoEnvironmentProvider = processInfoEnvironmentProvider
     }
 
     deinit {
         pendingPollTask?.cancel()
-        for pair in immediatePollTaskMap {
-            pair.value.cancel()
-        }
     }
 
     // MARK: - Helpers
@@ -99,6 +103,11 @@ public actor LogClient {
     /// Will enable the ``OSLogClient/isPollingEnabled`` flag and invoke the ``OSLogClient/executePoll()`` method.
     public func startPolling() {
         isEnabled = true
+        // Don't execute if no drivers registered
+        if shouldPauseIfNoRegisteredDrivers, drivers.isEmpty {
+            return
+        }
+        // Otherwise execute poll
         if pendingPollTask == nil {
             executePoll()
         }
@@ -149,20 +158,6 @@ public actor LogClient {
             softStopPolling()
         }
     }
-
-    /// Will force an immediate poll of logs on a detached task.
-    /// **Note:** This does not reset or otherwise alter the current interval driven polling.
-    /// - Parameter date: Optional date to query from. Leave `nil` to query from the last time logs were polled (default behaviour).
-    public func pollImmediately(from date: Date? = nil) {
-        // Generate task
-        let taskId: UUID = .init()
-        let pollTask: Task<(), Error> = Task(priority: .userInitiated) { [weak self, taskId] in
-            guard let self else { return }
-            await self.pollLatestLogs(from: date)
-            await self.removeImmediatePollTask(withId: taskId)
-        }
-        immediatePollTaskMap[taskId] = pollTask
-    }
     
     /// Will assign the given Bool flag to the ``LogClient/shouldPauseIfNoRegisteredDrivers`` property.
     ///
@@ -172,16 +167,16 @@ public actor LogClient {
         shouldPauseIfNoRegisteredDrivers = flag
     }
 
-    // MARK: - Helpers: Polling Task Helpers
-    
-    /// Will remove the immediate polling task with the given taskID from the map.
-    /// - Parameter taskId: The id of the task to remove
-    func removeImmediatePollTask(withId taskId: UUID) {
-        immediatePollTaskMap.removeValue(forKey: taskId)
+    // MARK: - Helpers: Polling
+
+    /// Will force an immediate poll of logs.
+    ///
+    /// **Note:** This does not reset or otherwise alter the current interval driven polling.
+    /// - Parameter date: Optional date to query from. Leave `nil` to query from the last time logs were polled (default behaviour).
+    public func pollImmediately(from date: Date? = nil) {
+        pollLatestLogs(from: date)
     }
 
-    // MARK: - Helpers: Polling
-    
     /// Will cancel any pending poll tasks, but not assign the `isPollingEnabled` flag to false.
     /// This is called when all drivers are deregistered but the consumer has not explicitly stopped polling.
     func softStopPolling() {
@@ -199,6 +194,8 @@ public actor LogClient {
     /// Will poll logs since the last processed time position and send to any registered drivers for validation and processing.
     /// - Parameter date: Optional date to request logs from. Leave this `nil` to default to the `lastProcessed` property.
     func pollLatestLogs(from date: Date? = nil) {
+        // Unit test support
+        _testTrackPollLatestLogs(date: date)
         do {
             var predicate: NSPredicate?
             let lastProcessed = lastProcessedDate
@@ -209,7 +206,12 @@ public actor LogClient {
             for driver in drivers {
                 driver.processLogs(items)
             }
-            updateLastProcessedForItems(items: items)
+            // Update last processed
+            var nextLastProcessed = lastProcessed
+            if let lastItemDate = items.max(by: { $0.date <= $1.date })?.date {
+                nextLastProcessed = lastItemDate
+            }
+            setLastProcessedDate(nextLastProcessed)
         } catch {
             logger.error("Error: Unable to get log entries from store: `\(error.localizedDescription)`")
         }
@@ -258,13 +260,61 @@ public actor LogClient {
             return lastProcessedDate
         }
     }
-    /// Will assess the current `lastProcessedStrategy` and update the stored date accordingly.
-    /// - Parameter items: The recently polled items.
-    func updateLastProcessedForItems(items: [OSLogEntryLog]) {
-        var lastProcessed = lastProcessedDate
-        if let lastItemDate = items.max(by: { $0.date <= $1.date })?.date {
-            lastProcessed = lastItemDate
-        }
-        setLastProcessedDate(lastProcessed)
+
+    // MARK: - Internal: Unit Testing Support
+
+    /*
+     Actors don't support convenience init. This internal init is used to inject a custom process info provider for facilitating
+     some unit test scenarios.
+
+     Did look at a protocol driven approach using the `AnyActor` but the property declaration limitations would cause non-isolated
+     compile errors. Might be a way to support, but I could not derive how at this time, so until then have put these methods in along
+     with an internal-only process info environment provider protocol to decorate various methods to facilitate unit testing where needed.
+     */
+
+    /// Internal `ProcessInfoProvider` conforming instance used to facilitate some unit test scenarios
+    let processInfoEnvironmentProvider: ProcessInfoEnvironmentProvider?
+
+    init(
+        pollingInterval: PollingInterval,
+        lastProcessedStrategy: LastProcessedStrategy,
+        logStore: OSLogStore,
+        logger: Logger? = nil,
+        processInfoEnvironmentProvider: ProcessInfoEnvironmentProvider?
+    ) {
+        self.logStore = logStore
+        self.pollingInterval = pollingInterval
+        self.lastProcessedStrategy = lastProcessedStrategy
+        self.logger = logger ?? Logger(subsystem: "com.cheekyghost.OSLogClient", category: "client")
+        self.processInfoEnvironmentProvider = processInfoEnvironmentProvider
+    }
+
+    var isUnitTesting: Bool {
+        guard let environment = processInfoEnvironmentProvider?.processInfoEnvironment else { return false }
+        // Comparing both xcode-driven unit testing and custom injected environment argument.
+        return environment["OSLOGCLIENT_UNIT_TESTING"] == "1"
+    }
+
+    /// Internal method to assign the pending poll task. This will only be actioned if being run within a unit-testing context.
+    /// - Parameter task: The task to assign.
+    func _testSetPendingPollTask(_ task: Task<(), Error>?) {
+        guard isUnitTesting else { return }
+        pendingPollTask = task
+    }
+
+    var _testPollLatestLogsCalled: Bool { _testPollLatestLogsCallCount > 0 }
+    var _testPollLatestLogsCallCount: Int = 0
+    var _testPollLatestLogsParameters: (date: Date?, Void)? {_testPollLatestLogsParameterList.last }
+    var _testPollLatestLogsParameterList: [(date: Date?, Void)] = []
+
+    func _testTrackPollLatestLogs(date: Date?) {
+        guard isUnitTesting else { return }
+        _testPollLatestLogsCallCount += 1
+        _testPollLatestLogsParameterList.append((date, ()))
+    }
+
+    func _testPollLatestLogsParametersAtIndex(_ index: Int) async -> (date: Date?, Void)? {
+        guard index < _testPollLatestLogsParameterList.count else { return nil }
+        return _testPollLatestLogsParameterList[index]
     }
 }

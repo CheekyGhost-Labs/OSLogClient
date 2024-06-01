@@ -12,438 +12,589 @@ final class LogClientTests: XCTestCase {
 
     // MARK: - Properties
 
+    let dateStub = Date().addingTimeInterval(-3600)
+    let logger = Logger(subsystem: "com.cheekyghost.OSLogClient", category: "unit-tests")
+    let lastProcessedDefaultsKey: String = "test-key"
+    let pollingInterval: PollingInterval = .custom(1)
+    var logStore: OSLogStore!
+    var lastProcessedStrategy: LastProcessedStrategy!
     var logDriverSpy: LogDriverSpy!
     var logDriverSpyTwo: LogDriverSpy!
-    var instanceUnderTest: LogClientPartialSpy!
+    var instanceUnderTest: LogClient!
+    var testProcessInfoProvider: TestProcessInfoProvider!
 
     // MARK: - Lifecycle
 
     override func setUpWithError() throws {
+        try super.setUpWithError()
+        logStore = try OSLogStore(scope: .currentProcessIdentifier)
         logDriverSpy = LogDriverSpy(id: "test")
         logDriverSpyTwo = LogDriverSpy(id: "test-two")
-        instanceUnderTest = try LogClientPartialSpy(pollingInterval: .custom(5))
-        // Enabling driver registration partials here as the underlying registry is an actor and can't be stubbed
-        instanceUnderTest.registerDriverSpy_withDriver.isPartialEnabled = true
-        instanceUnderTest.deregisterDriverSpy_withId.isPartialEnabled = true
-        instanceUnderTest.isDriverRegisteredSpy_withId_boolOut.isPartialEnabled = true
-        // Perma-enabling convenience getter partials
-        instanceUnderTest.isPollingEnabledSpy.partialType = .getter
-        instanceUnderTest.pollingIntervalSpy.partialType = .getter
-        instanceUnderTest.shouldPauseIfNoRegisteredDriversSpy.partialType = .getter
-        instanceUnderTest.lastPolledDateSpy.partialType = .getter
+        testProcessInfoProvider = TestProcessInfoProvider()
+        lastProcessedStrategy = .userDefaults(key: lastProcessedDefaultsKey)
+        instanceUnderTest = LogClient(
+            pollingInterval: pollingInterval,
+            lastProcessedStrategy: lastProcessedStrategy,
+            logStore: logStore,
+            logger: logger,
+            processInfoEnvironmentProvider: testProcessInfoProvider
+        )
     }
 
-    // MARK: - Tests
+    /**
+     NOTE: Using direct assessment, and presence of expected objects (polling task etc) as unable to subclass (and therefore spy on)
+     actor instances. This is annoying, but understandable due to the nature of an Actor.
+     */
 
-    func test_init_willAssignProvidedProperties() async {
-        instanceUnderTest.pollingIntervalSpy.partialType = .getter
-        let result = await instanceUnderTest.pollingInterval
-        XCTAssertEqual(result, .custom(5))
+    // MARK: - Tests: Drivers: Lifecycle
+
+    func test_init_public_willAssignProvidedProperties() async {
+        let instance = LogClient(
+            pollingInterval: .custom(123),
+            lastProcessedStrategy: .userDefaults(key: "test-key"),
+            logStore: logStore,
+            logger: logger
+        )
+        await XCTAssertEqual_async(await instance.pollingInterval, .custom(123))
+        await XCTAssertEqual_async(await instance.lastProcessedStrategy, .userDefaults(key: "test-key"))
+        await XCTAssertTrue_async(await instance.logStore === logStore)
+        // Logger does not conform to Equatable (and subsystem/category is unaccessible) :(
+    }
+
+    func test_init_internal_willAssignProvidedProperties() async {
+        let instance = LogClient(
+            pollingInterval: .custom(123),
+            drivers: [logDriverSpy, logDriverSpyTwo],
+            lastProcessedStrategy: .userDefaults(key: "test-key"),
+            logStore: logStore,
+            logger: logger,
+            processInfoEnvironmentProvider: testProcessInfoProvider
+        )
+        await XCTAssertEqual_async(await instance.pollingInterval, .custom(123))
+        await XCTAssertEqual_async(await instance.drivers, [logDriverSpy, logDriverSpyTwo])
+        await XCTAssertEqual_async(await instance.lastProcessedStrategy, .userDefaults(key: "test-key"))
+        await XCTAssertTrue_async(await instance.logStore === logStore)
+        // Logger does not conform to Equatable (and subsystem/category is unaccessible) :(
+    }
+
+    // MARK: - Tests: Should Pause Flag Helper
+
+    func test_setShouldPauseIfNoRegisteredDrivers_false_willAssignProvidedFlagToProperty() async {
+        // Given
+        await XCTAssertTrue_async(await instanceUnderTest.shouldPauseIfNoRegisteredDrivers)
+
+        // When
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(false)
+
+        // Then
+        await XCTAssertFalse_async(await instanceUnderTest.shouldPauseIfNoRegisteredDrivers)
+    }
+
+    func test_setShouldPauseIfNoRegisteredDrivers_true_willAssignProvidedFlagToProperty() async {
+        // Given
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(false)
+        await XCTAssertFalse_async(await instanceUnderTest.shouldPauseIfNoRegisteredDrivers)
+
+        // When
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(true)
+
+        // Then
+        await XCTAssertTrue_async(await instanceUnderTest.shouldPauseIfNoRegisteredDrivers)
+    }
+
+    // MARK: - Tests: Last Processed Date Helpers
+
+    func test_loadLastProcessedDate_userDefaults_missing_willReturnNil() async {
+        UserDefaults.standard.removeObject(forKey: lastProcessedDefaultsKey)
+        await XCTAssertNil_async(await instanceUnderTest.loadLastProcessedDate())
+    }
+
+    func test_loadLastProcessedDate_userDefaults_present_willReturnStoredDate() async {
+        UserDefaults.standard.setValue(dateStub.timeIntervalSince1970, forKey: lastProcessedDefaultsKey)
+        let result = await instanceUnderTest.loadLastProcessedDate()
+        XCTAssertEqual(result?.timeIntervalSince1970, dateStub.timeIntervalSince1970)
+    }
+
+    func test_loadLastProcessedDate_inMemory_missing_willReturnNil() async {
+        let instance = LogClient(
+            pollingInterval: .custom(1),
+            lastProcessedStrategy: .inMemory,
+            logStore: logStore,
+            logger: logger,
+            processInfoEnvironmentProvider: testProcessInfoProvider
+        )
+        await instance.setLastProcessedDate(nil)
+        await XCTAssertNil_async(await instance.loadLastProcessedDate())
+    }
+
+    func test_loadLastProcessedDate_inMemory_present_willReturnStoredDate() async {
+        let instance = LogClient(
+            pollingInterval: .custom(1),
+            lastProcessedStrategy: .inMemory,
+            logStore: logStore,
+            logger: logger,
+            processInfoEnvironmentProvider: testProcessInfoProvider
+        )
+        await instance.setLastProcessedDate(dateStub)
+        let result = await instance.loadLastProcessedDate()
+        XCTAssertEqual(result?.timeIntervalSince1970, dateStub.timeIntervalSince1970)
+    }
+
+    func test_setLastProcessedDate_userDefaults_willStoreToDefaults_and_willAssignToProperty() async {
+        // Given
+        await instanceUnderTest.setLastProcessedDate(nil)
+        UserDefaults.standard.removeObject(forKey: lastProcessedDefaultsKey)
+        XCTAssertNil(UserDefaults.standard.value(forKey: lastProcessedDefaultsKey))
+        await XCTAssertNil_async(await instanceUnderTest.lastProcessedDate)
+
+        // When
+        await instanceUnderTest.setLastProcessedDate(dateStub)
+
+        // Then
+        XCTAssertEqual(UserDefaults.standard.value(forKey: lastProcessedDefaultsKey) as? TimeInterval, dateStub.timeIntervalSince1970)
+        await XCTAssertEqual_async(await instanceUnderTest.lastProcessedDate?.timeIntervalSince1970, dateStub.timeIntervalSince1970)
+    }
+
+    func test_setLastProcessedDate_inMemory_willNotStoreToDefaults_and_willAssignToProperty() async {
+        let instance = LogClient(
+            pollingInterval: .custom(1),
+            lastProcessedStrategy: .inMemory,
+            logStore: logStore,
+            logger: logger,
+            processInfoEnvironmentProvider: testProcessInfoProvider
+        )
+        // Given
+        await instance.setLastProcessedDate(nil)
+        UserDefaults.standard.removeObject(forKey: lastProcessedDefaultsKey)
+        XCTAssertNil(UserDefaults.standard.value(forKey: lastProcessedDefaultsKey))
+        await XCTAssertNil_async(await instance.lastProcessedDate)
+
+        // When
+        await instance.setLastProcessedDate(dateStub)
+
+        // Then
+        XCTAssertNil(UserDefaults.standard.value(forKey: lastProcessedDefaultsKey))
+        await XCTAssertEqual_async(await instance.lastProcessedDate?.timeIntervalSince1970, dateStub.timeIntervalSince1970)
+    }
+
+    // MARK: - Tests: Drivers: Registration
+
+    func test_init_hasExpectedProperties() async throws {
+        await XCTAssertEqual_async(await instanceUnderTest.drivers, [])
+    }
+
+    func test_isDriverRegistered_idPresent_willReturnTrue() async {
+        await XCTAssertEqual_async(await instanceUnderTest.drivers, [])
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await XCTAssertTrue_async(await instanceUnderTest.isDriverRegistered(withId: logDriverSpy.id))
+    }
+
+    func test_isDriverRegistered_idMissing_willReturnFalse() async {
+        await XCTAssertEqual_async(await instanceUnderTest.drivers, [])
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await XCTAssertFalse_async(await instanceUnderTest.isDriverRegistered(withId: "missing"))
+    }
+
+    func test_registerDriver_notRegistered_willAppendToDriversArray() async {
+        await XCTAssertEqual_async(await instanceUnderTest.drivers, [])
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await XCTAssertEqual_async(await instanceUnderTest.drivers, [logDriverSpy])
+    }
+
+    func test_registerDriver_alreadyRegistered_willNotAppendToDriversArray() async {
+        await XCTAssertEqual_async(await instanceUnderTest.drivers, [])
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await XCTAssertEqual_async(await instanceUnderTest.drivers, [logDriverSpy])
+    }
+
+    func test_deRegisterDriver_willRemoveProvidedIdOnly() async {
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await instanceUnderTest.registerDriver(logDriverSpyTwo)
+        await XCTAssertEqual_async(await instanceUnderTest.drivers, [logDriverSpy, logDriverSpyTwo])
+        await instanceUnderTest.deregisterDriver(withId: logDriverSpy.id)
+        await XCTAssertEqual_async(await instanceUnderTest.drivers, [logDriverSpyTwo])
+        await instanceUnderTest.deregisterDriver(withId: logDriverSpy.id)
+        await XCTAssertEqual_async(await instanceUnderTest.drivers, [logDriverSpyTwo])
+        await instanceUnderTest.deregisterDriver(withId: logDriverSpyTwo.id)
+        await XCTAssertEqual_async(await instanceUnderTest.drivers, [])
+    }
+
+    // MARK: - Tests: Drivers: Registration: Poll Execution
+
+    func test_registerDriver_emptyDrivers_pollingEnabled_shouldPauseIfNoRegisteredDriversTrue_willInvokeExecutePoll() async {
+        // Given
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(true)
+        await XCTAssertTrue_async(await instanceUnderTest.drivers.isEmpty)
+        await instanceUnderTest.startPolling()
+
+        // When
+        await instanceUnderTest.pendingPollTask?.cancel()
+        await instanceUnderTest._testSetPendingPollTask(nil)
+        await instanceUnderTest.registerDriver(logDriverSpy)
+
+        // Then
+        await XCTAssertNotNil_async(await instanceUnderTest.pendingPollTask)
+    }
+
+    func test_registerDriver_emptyDrivers_pollingEnabled_shouldPauseIfNoRegisteredDriversFalse_willNotInvokeExecutePoll() async {
+        // Given
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(false)
+        await XCTAssertTrue_async(await instanceUnderTest.drivers.isEmpty)
+        await instanceUnderTest.startPolling()
+
+        // When
+        await instanceUnderTest.pendingPollTask?.cancel()
+        await instanceUnderTest._testSetPendingPollTask(nil)
+        await instanceUnderTest.registerDriver(logDriverSpy)
+
+        // Then
+        await XCTAssertNil_async(await instanceUnderTest.pendingPollTask)
+    }
+
+    func test_registerDriver_emptyDrivers_pollingDisabled_shouldPauseIfNoRegisteredDriversTrue_willNotStartPolling() async {
+        // Given
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(true)
+        await XCTAssertTrue_async(await instanceUnderTest.drivers.isEmpty)
+        await instanceUnderTest.stopPolling()
+
+        // When
+        await instanceUnderTest.registerDriver(logDriverSpy)
+
+        // Then
+        await XCTAssertNil_async(await instanceUnderTest.pendingPollTask)
+    }
+
+    func test_registerDriver_emptyDrivers_pollingDisabled_shouldPauseIfNoRegisteredDriversFalse_willNotStartPolling() async {
+        // Given
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(false)
+        await XCTAssertTrue_async(await instanceUnderTest.drivers.isEmpty)
+        await instanceUnderTest.stopPolling()
+
+        // When
+        await instanceUnderTest.registerDriver(logDriverSpy)
+
+        // Then
+        await XCTAssertNil_async(await instanceUnderTest.pendingPollTask)
+    }
+
+    func test_registerDriver_existingDrivers_pollingEnabled_shouldPauseIfNoRegisteredDriversTrue_willNotInvokeExecutePolling() async {
+        // Given
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(true)
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await XCTAssertFalse_async(await instanceUnderTest.drivers.isEmpty)
+        await instanceUnderTest.startPolling()
+
+        // When
+        await instanceUnderTest.pendingPollTask?.cancel()
+        await instanceUnderTest._testSetPendingPollTask(nil)
+        await instanceUnderTest.registerDriver(logDriverSpyTwo)
+
+        // Then
+        await XCTAssertNil_async(await instanceUnderTest.pendingPollTask)
+    }
+
+    func test_registerDriver_existingDrivers_pollingEnabled_shouldPauseIfNoRegisteredDriversFalse_willNotInvokeExecutePolling() async {
+        // Given
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(false)
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await XCTAssertFalse_async(await instanceUnderTest.drivers.isEmpty)
+        await instanceUnderTest.startPolling()
+
+        // When
+        await instanceUnderTest.pendingPollTask?.cancel()
+        await instanceUnderTest._testSetPendingPollTask(nil)
+        await instanceUnderTest.registerDriver(logDriverSpyTwo)
+
+        // Then
+        await XCTAssertNil_async(await instanceUnderTest.pendingPollTask)
+    }
+
+    func test_registerDriver_existingDrivers_pollingDisabled_shouldPauseIfNoRegisteredDriversTrue_willNotInvokeExecutePolling() async {
+        // Given
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(true)
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await XCTAssertFalse_async(await instanceUnderTest.drivers.isEmpty)
+        await instanceUnderTest.stopPolling()
+
+        // When
+        await instanceUnderTest.registerDriver(logDriverSpyTwo)
+
+        // Then
+        await XCTAssertNil_async(await instanceUnderTest.pendingPollTask)
+    }
+
+    func test_registerDriver_existingDrivers_pollingDisabled_shouldPauseIfNoRegisteredDriversFalse_willNotInvokeExecutePolling() async {
+        // Given
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(false)
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await XCTAssertFalse_async(await instanceUnderTest.drivers.isEmpty)
+        await instanceUnderTest.stopPolling()
+
+        // When
+        await instanceUnderTest.registerDriver(logDriverSpyTwo)
+
+        // Then
+        await XCTAssertNil_async(await instanceUnderTest.pendingPollTask)
+    }
+
+    // MARK: - Tests: DeRegistration: Soft Stop Polling
+
+    func test_deregisterDriver_driversRemaining_willNotInvokeSoftStopPolling() async {
+        // Given
+        await instanceUnderTest.startPolling()
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await instanceUnderTest.registerDriver(logDriverSpyTwo)
+        let pendingTask = Task<(), Error> {}
+        await instanceUnderTest._testSetPendingPollTask(pendingTask)
+        await XCTAssertEqual_async(await instanceUnderTest.pendingPollTask, pendingTask)
+
+        // When
+        await instanceUnderTest.deregisterDriver(withId: logDriverSpy.id)
+
+        // Then
+        await XCTAssertEqual_async(await instanceUnderTest.drivers.count, 1)
+        await XCTAssertTrue_async(await instanceUnderTest.isEnabled)
+        await XCTAssertEqual_async(await instanceUnderTest.pendingPollTask, pendingTask)
+    }
+
+    func test_deregisterDriver_noDriversRemaining_shouldPauseIfNoRegisteredDriversEnabled_pollingEnabled_willInvokeSoftStopPolling() async {
+        // Given
+        await instanceUnderTest.startPolling()
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(true)
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await instanceUnderTest.registerDriver(logDriverSpyTwo)
+        let pendingTask = Task<(), Error> {}
+        await instanceUnderTest._testSetPendingPollTask(pendingTask)
+        await XCTAssertEqual_async(await instanceUnderTest.pendingPollTask, pendingTask)
+
+        // When
+        await instanceUnderTest.deregisterDriver(withId: logDriverSpy.id)
+        await instanceUnderTest.deregisterDriver(withId: logDriverSpyTwo.id)
+
+        // Then
+        await XCTAssertEqual_async(await instanceUnderTest.drivers.count, 0)
+        await XCTAssertTrue_async(await instanceUnderTest.isEnabled)
+        await XCTAssertNil_async(await instanceUnderTest.pendingPollTask)
+    }
+
+    func test_deregisterDriver_noDriversRemaining_shouldPauseIfNoRegisteredDriversEnabled_pollingDisabled_willNotInvokeSoftStopPolling() async {
+        // Given
+        await instanceUnderTest.stopPolling()
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(true)
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await instanceUnderTest.registerDriver(logDriverSpyTwo)
+        await XCTAssertEqual_async(await instanceUnderTest.drivers.count, 2)
+        await XCTAssertFalse_async(await instanceUnderTest.isEnabled)
+        // Forcefully assigning a dummy pending task here. Would not be teared down as result of `stopPolling` call assigned after `stopPolling`.
+        let pendingTask = Task<(), Error> {}
+        await instanceUnderTest._testSetPendingPollTask(pendingTask)
+        await XCTAssertEqual_async(await instanceUnderTest.pendingPollTask, pendingTask)
+
+        // When
+        await instanceUnderTest.deregisterDriver(withId: logDriverSpy.id)
+        await instanceUnderTest.deregisterDriver(withId: logDriverSpyTwo.id)
+
+        // Then
+        await XCTAssertEqual_async(await instanceUnderTest.drivers.count, 0)
+        await XCTAssertFalse_async(await instanceUnderTest.isEnabled)
+        // Pending task not effected (soft stop)
+        await XCTAssertEqual_async(await instanceUnderTest.pendingPollTask, pendingTask)
+    }
+
+    func test_deregisterDriver_noDriversRemaining_shouldPauseIfNoRegisteredDriversDisabled_pollingEnabled_willNotInvokeSoftStopPolling() async {
+        // Given
+        await instanceUnderTest.startPolling()
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(false)
+        await instanceUnderTest.registerDriver(logDriverSpy)
+        await instanceUnderTest.registerDriver(logDriverSpyTwo)
+        await XCTAssertTrue_async(await instanceUnderTest.isEnabled)
+        // Forcefully assigning a dummy pending task here. Would not be teared down as result of `stopPolling` call assigned after `stopPolling`.
+        let pendingTask = Task<(), Error> {}
+        await instanceUnderTest._testSetPendingPollTask(pendingTask)
+        await XCTAssertEqual_async(await instanceUnderTest.pendingPollTask, pendingTask)
+
+        // When
+        await instanceUnderTest.deregisterDriver(withId: logDriverSpy.id)
+        await instanceUnderTest.deregisterDriver(withId: logDriverSpyTwo.id)
+
+        // Then
+        await XCTAssertEqual_async(await instanceUnderTest.drivers.count, 0)
+        await XCTAssertTrue_async(await instanceUnderTest.isEnabled)
+        await XCTAssertEqual_async(await instanceUnderTest.pendingPollTask, pendingTask)
     }
 
     // MARK: - Tests: Polling: Start/Stop
 
     func test_startPolling_willUpdateConfig_toIsEnabledTrue() async throws {
-        instanceUnderTest.startPollingSpy.isPartialEnabled = true
         // Given
-        await XCTAssertFalse_async(await instanceUnderTest.isPollingEnabled)
-        await XCTAssertFalse_async(await instanceUnderTest.config.isEnabled)
+        await XCTAssertFalse_async(await instanceUnderTest.isEnabled)
 
         // When
         await instanceUnderTest.startPolling()
 
         // Then
-        await XCTAssertTrue_async(await instanceUnderTest.isPollingEnabled)
-        await XCTAssertTrue_async(await instanceUnderTest.config.isEnabled)
+        await XCTAssertTrue_async(await instanceUnderTest.isEnabled)
     }
 
-    func test_startPolling_willExecutePoll() async throws {
-        instanceUnderTest.startPollingSpy.isPartialEnabled = true
-        instanceUnderTest.executePollSpy.isPartialEnabled = true
+    func test_startPolling_noDrivers_shouldPauseIfNoRegisteredDriversTrue_willNotExecutePoll() async throws {
+        // Given
+        await XCTAssertNil_async(await instanceUnderTest.pendingPollTask)
+
+        // When
         await instanceUnderTest.startPolling()
-        XCTAssertEqual(instanceUnderTest.executePollSpy.callCount, 1)
+
+        // Then
+        await XCTAssertNil_async(await instanceUnderTest.pendingPollTask)
+    }
+
+    func test_startPolling_noDrivers_shouldPauseIfNoRegisteredDriversFalse_willExecutePoll() async throws {
+        // Given
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(false)
+        await XCTAssertNil_async(await instanceUnderTest.pendingPollTask)
+
+        // When
+        await instanceUnderTest.startPolling()
+
+        // Then
+        await XCTAssertNotNil_async(await instanceUnderTest.pendingPollTask)
+    }
+
+    func test_startPolling_driversPresent_shouldPauseIfNoRegisteredDriversTrue_willExecutePoll() async throws {
+        // Given
+        await XCTAssertNil_async(await instanceUnderTest.pendingPollTask)
+        await instanceUnderTest.registerDriver(logDriverSpy)
+
+        // When
+        await instanceUnderTest.startPolling()
+
+        // Then
+        await XCTAssertNotNil_async(await instanceUnderTest.pendingPollTask)
     }
 
     func test_stopPolling_willDisableFlag() async throws {
-        instanceUnderTest.startPollingSpy.isPartialEnabled = true
-        instanceUnderTest.stopPollingSpy.isPartialEnabled = true
-
         // Given
         await instanceUnderTest.startPolling()
-        await XCTAssertTrue_async(await instanceUnderTest.isPollingEnabled)
-        await XCTAssertTrue_async(await instanceUnderTest.config.isEnabled)
+        await XCTAssertTrue_async(await instanceUnderTest.isEnabled)
 
         // When
         await instanceUnderTest.stopPolling()
 
         // Then
-        await XCTAssertFalse_async(await instanceUnderTest.isPollingEnabled)
-        await XCTAssertFalse_async(await instanceUnderTest.config.isEnabled)
+        await XCTAssertFalse_async(await instanceUnderTest.isEnabled)
     }
 
-    func test_stopPolling_willTearDownPendingPollTask() async throws {
-        instanceUnderTest.startPollingSpy.isPartialEnabled = true
-        instanceUnderTest.stopPollingSpy.isPartialEnabled = true
-        // Ensure super getter/setter are used
-        instanceUnderTest.pendingPollTaskSpy.partialType = .all
+    func test_stopPolling_pendingPollTask_willTearDownPendingPollTask() async throws {
         // Given
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(false)
         await instanceUnderTest.startPolling()
-        let pendingTask = Task.detached(operation: {
-            try await Task.sleep(nanoseconds: PollingInterval.custom(1).nanoseconds)
-        })
-        instanceUnderTest.pendingPollTask = pendingTask
+        let pendingTask = try await XCTUnwrap_async(await instanceUnderTest.pendingPollTask)
 
         // When
         await instanceUnderTest.stopPolling()
 
         // Then
         XCTAssertTrue(pendingTask.isCancelled)
-        XCTAssertNil(instanceUnderTest.pendingPollTask)
+        await XCTAssertNil_async(await instanceUnderTest.pendingPollTask)
     }
 
-    // MARK: - Tests: Polling: Update Interval
+    // MARK: - Immediate Poll
 
-    func test_updateInterval_withPendingTask_willCancelPendingTask() async {
-        instanceUnderTest.stopPollingSpy.isPartialEnabled = true
-        instanceUnderTest.setPollingIntervalSpy_withInterval.isPartialEnabled = true
+    func test_pollImmediately_pollingEnabled_willInvokePollFromDate() async throws {
         // Given
-        let pendingTask = Task.detached(operation: {
-            try await Task.sleep(nanoseconds: PollingInterval.custom(1).nanoseconds)
-        })
-        instanceUnderTest.pendingPollTaskSpy.stubbedResult = pendingTask
-
-        // When
-        await instanceUnderTest.setPollingInterval(.custom(1))
-
-        // Then
-        XCTAssertTrue(pendingTask.isCancelled)
-    }
-
-    func test_updateInterval_willAssignIntervalToConfig() async throws {
-        instanceUnderTest.setPollingIntervalSpy_withInterval.isPartialEnabled = true
-
-        // When
-        await instanceUnderTest.setPollingInterval(.custom(123))
-
-        // Then
-        await XCTAssertEqual_async(await instanceUnderTest.pollingInterval, .custom(123))
-        await XCTAssertEqual_async(await instanceUnderTest.config.pollingInterval, .custom(123))
-    }
-
-    func test_updateInterval_pollingEnabled_driversNotEmpty_willInvokeExecutePoll() async {
-        instanceUnderTest.setPollingIntervalSpy_withInterval.isPartialEnabled = true
-        await instanceUnderTest.logDriverRegistry.registerDriver(logDriverSpy)
-        await instanceUnderTest.config.setIsEnabled(true)
-        
-        // Given
-        instanceUnderTest.isPollingEnabledSpy.partialType = .disabled
-        instanceUnderTest.isPollingEnabledSpy.stubbedResult = true
-        await XCTAssertFalse_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-
-        // When
-        await instanceUnderTest.setPollingInterval(.custom(123))
-
-        // Then
-        XCTAssertEqual(instanceUnderTest.executePollSpy.callCount, 1)
-        XCTAssertFalse(instanceUnderTest.startPollingSpy.called)
-    }
-
-    func test_updateInterval_pollingDisabled_driversNotEmpty_willNotInvokeExecutePoll() async {
-        instanceUnderTest.setPollingIntervalSpy_withInterval.isPartialEnabled = true
-        await instanceUnderTest.logDriverRegistry.registerDriver(logDriverSpy)
-        await instanceUnderTest.config.setIsEnabled(true)
-
-        // Given
-        instanceUnderTest.isPollingEnabledSpy.partialType = .disabled
-        instanceUnderTest.isPollingEnabledSpy.stubbedResult = false
-        await XCTAssertFalse_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-
-        // When
-        await instanceUnderTest.setPollingInterval(.custom(123))
-
-        // Then
-        XCTAssertFalse(instanceUnderTest.executePollSpy.called)
-        XCTAssertFalse(instanceUnderTest.startPollingSpy.called)
-    }
-
-    func test_updateInterval_notEnabled_driversNotEmpty_willNotInvokeStartPolling() async {
-        instanceUnderTest.setPollingIntervalSpy_withInterval.isPartialEnabled = true
-        await instanceUnderTest.logDriverRegistry.registerDriver(logDriverSpy)
-        await instanceUnderTest.config.setIsEnabled(false)
-
-        // Given
-        await XCTAssertFalse_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-        await XCTAssertFalse_async(await instanceUnderTest.config.isEnabled)
-
-        // When
-        await instanceUnderTest.setPollingInterval(.custom(123))
-
-        // Then
-        XCTAssertFalse(instanceUnderTest.startPollingSpy.called)
-    }
-
-    func test_updateInterval_enabled_driversEmpty_willNotInvokeStartPolling() async {
-        instanceUnderTest.setPollingIntervalSpy_withInterval.isPartialEnabled = true
-        await instanceUnderTest.config.setIsEnabled(true)
-
-        // Given
-        await XCTAssertTrue_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-        await XCTAssertTrue_async(await instanceUnderTest.config.isEnabled)
-
-        // When
-        await instanceUnderTest.setPollingInterval(.custom(123))
-
-        // Then
-        XCTAssertFalse(instanceUnderTest.startPollingSpy.called)
-    }
-
-    // MARK: - Tests: Drivers: isRegistered
-
-    /*
-     Note: Usually would spy on an instance of the `LogDriverRegistry`, however, actors don't support inheritance
-     so will just assess the instance directly for sanity checks. The `LogDriverRegistry` has it's own dedicated tests.
-     */
-
-    func test_isDriverRegistered_driversEmpty_willReturnFalse() async {
-        await XCTAssertTrue_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-        await XCTAssertFalse_async(await instanceUnderTest.isDriverRegistered(withId: "missing"))
-        await XCTAssertFalse_async(await instanceUnderTest.isDriverRegistered(withId: logDriverSpy.id))
-        await XCTAssertFalse_async(await instanceUnderTest.isDriverRegistered(withId: logDriverSpyTwo.id))
-    }
-
-    func test_isDriverRegistered_driversPresent_withUnregisteredDriver_willReturnFalse() async {
-        await instanceUnderTest.registerDriver(logDriverSpy)
-        await XCTAssertFalse_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-        await XCTAssertFalse_async(await instanceUnderTest.isDriverRegistered(withId: "missing"))
-    }
-
-    func test_isDriverRegistered_driversPresent_withRegisteredDriver_willReturnFalse() async {
-        await instanceUnderTest.registerDriver(logDriverSpy)
-        await XCTAssertFalse_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-        await XCTAssertTrue_async(await instanceUnderTest.isDriverRegistered(withId: logDriverSpy.id))
-    }
-
-    // MARK: - Tests: Drivers: Registering
-
-    func test_registerDriver_willAppendToRegistry() async {
-        await XCTAssertTrue_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-        await instanceUnderTest.registerDriver(logDriverSpy)
-        await XCTAssertEqual_async(await instanceUnderTest.logDriverRegistry.drivers.count, 1)
-        await XCTAssertTrue_async(await instanceUnderTest.logDriverRegistry.drivers[0] === logDriverSpy)
-    }
-
-    func test_registerDriver_emptyDrivers_pollingEnabled_willInvokeExecutePoll() async {
-        // Given
-        instanceUnderTest.isPollingEnabledSpy.partialType = .disabled
-        instanceUnderTest.isPollingEnabledSpy.stubbedResult = true
-        await XCTAssertTrue_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-
-        // When
-        await instanceUnderTest.registerDriver(logDriverSpy)
-
-        // Then
-        XCTAssertEqual(instanceUnderTest.executePollSpy.callCount, 1)
-    }
-
-    func test_registerDriver_emptyDrivers_pollingNotEnabled_willNotStartPolling() async {
-        // Given
-        instanceUnderTest.isPollingEnabledSpy.partialType = .disabled
-        instanceUnderTest.isPollingEnabledSpy.stubbedResult = false
-        await XCTAssertTrue_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-
-        // When
-        await instanceUnderTest.registerDriver(logDriverSpy)
-
-        // Then
-        XCTAssertFalse(instanceUnderTest.startPollingSpy.called)
-    }
-
-    func test_registerDriver_existingDrivers_pollingEnabled_willNotInvokeExecutePolling() async {
-        // Given
-        instanceUnderTest.isPollingEnabledSpy.partialType = .disabled
-        instanceUnderTest.isPollingEnabledSpy.stubbedResult = true
-        await instanceUnderTest.registerDriver(logDriverSpy)
-        await XCTAssertFalse_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-
-        // When
-        await instanceUnderTest.registerDriver(logDriverSpyTwo)
-
-        // Then
-        XCTAssertFalse(instanceUnderTest.startPollingSpy.called)
-    }
-
-    func test_registerDriver_existingDrivers_pollingDisabled_willNotInvokeExecutePolling() async {
-        // Given
-        instanceUnderTest.isPollingEnabledSpy.partialType = .disabled
-        instanceUnderTest.isPollingEnabledSpy.stubbedResult = false
-        await instanceUnderTest.registerDriver(logDriverSpy)
-        await XCTAssertFalse_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-
-        // When
-        await instanceUnderTest.registerDriver(logDriverSpyTwo)
-
-        // Then
-        XCTAssertFalse(instanceUnderTest.startPollingSpy.called)
-    }
-
-    // MARK: - Tests: Drivers: DeRegistering
-
-    func test_deregisterDriver_driversRemaining_willNotInvokeSoftStopPolling() async {
-        // Given
-        await instanceUnderTest.registerDriver(logDriverSpy)
-        await instanceUnderTest.registerDriver(logDriverSpyTwo)
-        await XCTAssertEqual_async(await instanceUnderTest.logDriverRegistry.drivers.count, 2)
-
-        // When
-        await instanceUnderTest.deregisterDriver(withId: logDriverSpy.id)
-
-        // Then
-        await XCTAssertEqual_async(await instanceUnderTest.logDriverRegistry.drivers.count, 1)
-        XCTAssertFalse(instanceUnderTest.stopPollingSpy.called)
-    }
-
-    func test_deregisterDriver_noDriversRemaining_shouldPauseIfNoRegisteredDriversEnabled_pollingEnabled_willInvokeSoftStopPolling() async {
-        // Given
-        instanceUnderTest.isPollingEnabledSpy.partialType = .disabled
-        instanceUnderTest.isPollingEnabledSpy.stubbedResult = true
-        instanceUnderTest.shouldPauseIfNoRegisteredDriversSpy.partialType = .disabled
-        instanceUnderTest.shouldPauseIfNoRegisteredDriversSpy.stubbedResult = true
-        await instanceUnderTest.registerDriver(logDriverSpy)
-        await instanceUnderTest.registerDriver(logDriverSpyTwo)
-        await XCTAssertEqual_async(await instanceUnderTest.logDriverRegistry.drivers.count, 2)
-
-        // When
-        await instanceUnderTest.deregisterDriver(withId: logDriverSpy.id)
-        await instanceUnderTest.deregisterDriver(withId: logDriverSpyTwo.id)
-
-        // Then
-        await XCTAssertTrue_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-        await XCTAssertEqual_async(instanceUnderTest.softStopPollingSpy.callCount, 1)
-    }
-
-    func test_deregisterDriver_noDriversRemaining_shouldPauseIfNoRegisteredDriversEnabled_pollingDisabled_willNotInvokeSoftStopPolling() async {
-        // Given
-        instanceUnderTest.isPollingEnabledSpy.partialType = .disabled
-        instanceUnderTest.isPollingEnabledSpy.stubbedResult = false
-        instanceUnderTest.shouldPauseIfNoRegisteredDriversSpy.partialType = .disabled
-        instanceUnderTest.shouldPauseIfNoRegisteredDriversSpy.stubbedResult = true
-        await instanceUnderTest.registerDriver(logDriverSpy)
-        await instanceUnderTest.registerDriver(logDriverSpyTwo)
-        await XCTAssertEqual_async(await instanceUnderTest.logDriverRegistry.drivers.count, 2)
-
-        // When
-        await instanceUnderTest.deregisterDriver(withId: logDriverSpy.id)
-        await instanceUnderTest.deregisterDriver(withId: logDriverSpyTwo.id)
-
-        // Then
-        await XCTAssertTrue_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-        await XCTAssertFalse_async(instanceUnderTest.softStopPollingSpy.called)
-    }
-
-    func test_deregisterDriver_noDriversRemaining_shouldPauseIfNoRegisteredDriversDisabled_pollingEnabled_willNotInvokeSoftStopPolling() async {
-        // Given
-        instanceUnderTest.isPollingEnabledSpy.partialType = .disabled
-        instanceUnderTest.isPollingEnabledSpy.stubbedResult = true
-        instanceUnderTest.shouldPauseIfNoRegisteredDriversSpy.partialType = .disabled
-        instanceUnderTest.shouldPauseIfNoRegisteredDriversSpy.stubbedResult = false
-        await instanceUnderTest.registerDriver(logDriverSpy)
-        await instanceUnderTest.registerDriver(logDriverSpyTwo)
-        await XCTAssertEqual_async(await instanceUnderTest.logDriverRegistry.drivers.count, 2)
-
-        // When
-        await instanceUnderTest.deregisterDriver(withId: logDriverSpy.id)
-        await instanceUnderTest.deregisterDriver(withId: logDriverSpyTwo.id)
-
-        // Then
-        await XCTAssertTrue_async(await instanceUnderTest.logDriverRegistry.drivers.isEmpty)
-        await XCTAssertFalse_async(instanceUnderTest.softStopPollingSpy.called)
-    }
-
-    // MARK: - ForcePoll
-
-    func test_forcePoll_pollingEnabled_willAssignPollTask() async throws {
-        // Given
-        instanceUnderTest.forcePollSpy_withDate.isPartialEnabled = true
-        instanceUnderTest.immediatePollTaskMapSpy.partialType = .all
-        await instanceUnderTest.config.setIsEnabled(true)
-        XCTAssertEqual(instanceUnderTest.immediatePollTaskMap.count, 0)
-
-        // When
-        instanceUnderTest.forcePoll()
-
-        // Then
-        XCTAssertEqual(instanceUnderTest.immediatePollTaskMap.count, 1)
-    }
-
-    func test_forcePoll_pollingDisabled_willAssignPollTask() async throws {
-        // Given
-        instanceUnderTest.forcePollSpy_withDate.isPartialEnabled = true
-        instanceUnderTest.immediatePollTaskMapSpy.partialType = .all
-        await instanceUnderTest.config.setIsEnabled(false)
-
-        // When
-        XCTAssertEqual(instanceUnderTest.immediatePollTaskMap.count, 0)
-        instanceUnderTest.forcePoll()
-
-        // Then
-        XCTAssertEqual(instanceUnderTest.immediatePollTaskMap.count, 1)
-    }
-
-    func test_forcePoll_pollingTaskScheduled_willNotEffectPendingPollTask() async throws {
-        // Partial setups
-        instanceUnderTest.executePollSpy.isPartialEnabled = true
-        instanceUnderTest.forcePollSpy_withDate.isPartialEnabled = true
-        instanceUnderTest.startPollingSpy.isPartialEnabled = true
-        instanceUnderTest.immediatePollTaskMapSpy.partialType = .all
-        instanceUnderTest.pendingPollTaskSpy.partialType = .all
-
-        // Given
-        await instanceUnderTest.config.setIsEnabled(true)
-
-        // When
         await instanceUnderTest.startPolling()
-        let pendingTask = try XCTUnwrap(instanceUnderTest.pendingPollTask)
+
+        // When
+        await instanceUnderTest.pollImmediately()
 
         // Then
-        XCTAssertEqual(instanceUnderTest.immediatePollTaskMap.count, 0)
+        await XCTAssertEqual_async(await instanceUnderTest._testPollLatestLogsCallCount, 1)
+    }
+
+    func test_pollImmediately_pollingDisabled_willInvokePollFromDate() async throws {
+        // Given
+        await instanceUnderTest.stopPolling()
+
+        // When
+        await instanceUnderTest.pollImmediately()
+
+        // Then
+        await XCTAssertEqual_async(await instanceUnderTest._testPollLatestLogsCallCount, 1)
+    }
+
+    func test_pollImmediately_pollingTaskScheduled_willNotEffectPendingPollTask() async throws {
+        // When
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(false)
+        await instanceUnderTest.startPolling()
+        let pendingTask = try await XCTUnwrap_async(await instanceUnderTest.pendingPollTask)
+
+        // Then
+        await XCTAssertFalse_async(await instanceUnderTest._testPollLatestLogsCalled)
 
         // And when
-        instanceUnderTest.forcePoll()
+        await instanceUnderTest.pollImmediately()
 
         // Then
-        XCTAssertEqual(instanceUnderTest.immediatePollTaskMap.count, 1)
-        XCTAssertNotNil(instanceUnderTest.pendingPollTask)
-        XCTAssertEqual(instanceUnderTest.pendingPollTask, pendingTask)
+        await XCTAssertEqual_async(await instanceUnderTest._testPollLatestLogsCallCount, 1)
+        await XCTAssertNotNil_async(await instanceUnderTest.pendingPollTask)
+        await XCTAssertEqual_async(await instanceUnderTest.pendingPollTask, pendingTask)
+    }
+
+    func test_pollImmediately_repeatedCalls_willInvokeAsReceived() async throws {
+        let dateTwo = Date().addingTimeInterval(-7200)
+        let dateThree = Date().addingTimeInterval(-10_800)
+        let dateFour = Date().addingTimeInterval(-14_400)
+        // When
+        await instanceUnderTest.setShouldPauseIfNoRegisteredDrivers(false)
+
+        // Then
+        await XCTAssertFalse_async(await instanceUnderTest._testPollLatestLogsCalled)
+
+        // And when
+        await instanceUnderTest.pollImmediately()
+        await instanceUnderTest.pollImmediately(from: dateTwo)
+        await instanceUnderTest.pollImmediately(from: dateThree)
+        await instanceUnderTest.pollImmediately(from: dateFour)
+
+        // Then - only first task should be present in map as cleanup was disabled for first invocation
+        await XCTAssertEqual_async(await instanceUnderTest._testPollLatestLogsCallCount, 4)
+        await XCTAssertNil_async(await instanceUnderTest._testPollLatestLogsParametersAtIndex(0)?.date)
+        await XCTAssertEqual_async(await instanceUnderTest._testPollLatestLogsParametersAtIndex(1)?.date, dateTwo)
+        await XCTAssertEqual_async(await instanceUnderTest._testPollLatestLogsParametersAtIndex(2)?.date, dateThree)
+        await XCTAssertEqual_async(await instanceUnderTest._testPollLatestLogsParametersAtIndex(3)?.date, dateFour)
     }
 
     // MARK: - Execute Polling
 
-    func test_executePoll_completion_willReExecutePoll() async {
+    func test_executePoll_completion_willReExecutePoll() async throws {
         // Given
-        await instanceUnderTest.setPollingInterval(.custom(1))
-        await instanceUnderTest.config.setIsEnabled(true)
-        instanceUnderTest.executePollSpy.isPartialEnabled = true
-        instanceUnderTest.pendingPollTaskSpy.partialType = .all
+        await instanceUnderTest.startPolling()
 
         // When
         await instanceUnderTest.executePoll() // Initial poll
+        let taskOne = try await XCTUnwrap_async(await instanceUnderTest.pendingPollTask)
+        _ = await instanceUnderTest.pendingPollTask?.result
+        let taskTwo = try await XCTUnwrap_async(await instanceUnderTest.pendingPollTask)
         _ = await instanceUnderTest.pendingPollTask?.result // Second poll
+        let taskThree = try await XCTUnwrap_async(await instanceUnderTest.pendingPollTask)
         _ = await instanceUnderTest.pendingPollTask?.result // Third poll
 
         // Then
-        XCTAssertEqual(instanceUnderTest.executePollSpy.callCount, 3)
+        XCTAssertNotEqual(taskOne, taskTwo)
+        XCTAssertNotEqual(taskTwo, taskThree)
     }
 
     func test_executePoll_pollingDisabled_willNotExecutePoll() async {
         // Given
-        await instanceUnderTest.setPollingInterval(.custom(1))
-        await instanceUnderTest.config.setIsEnabled(false)
-        instanceUnderTest.executePollSpy.isPartialEnabled = true
+        await instanceUnderTest.stopPolling()
 
         // When
         await instanceUnderTest.executePoll()
 
         // Then
-        XCTAssertNil(instanceUnderTest.pendingPollTask)
+        await XCTAssertNil_async(await instanceUnderTest.pendingPollTask)
     }
 }

@@ -47,4 +47,34 @@ extension XCTestCase {
         let result = try await expression()
         XCTAssertFalse(result, message(), file: file, line: line)
     }
+
+    public func XCTAssertNil_async(
+        _ expression: @autoclosure () async throws -> Any?,
+        _ message: @autoclosure () -> String = "",
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async rethrows {
+        let result = try await expression()
+        XCTAssertNil(result, message(), file: file, line: line)
+    }
+
+    public func XCTAssertNotNil_async(
+        _ expression: @autoclosure () async throws -> Any?,
+        _ message: @autoclosure () -> String = "",
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async rethrows {
+        let result = try await expression()
+        XCTAssertNotNil(result, message(), file: file, line: line)
+    }
+
+    public func XCTUnwrap_async<T>(
+        _ expression: @autoclosure () async throws -> T?,
+        _ message: @autoclosure () -> String = "",
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws -> T {
+        let result = try await expression()
+        return try XCTUnwrap(result, message(), file: file, line: line)
+    }
 }

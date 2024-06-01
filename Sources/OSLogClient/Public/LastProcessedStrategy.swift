@@ -8,7 +8,7 @@
 import Foundation
 
 /// Enumeration of supported strategies for storing and updating the datetime the log store was last successfully queried and processed.
-public enum LastProcessedStrategy {
+public enum LastProcessedStrategy: Equatable {
     case userDefaults(key: String)
     case inMemory
     
