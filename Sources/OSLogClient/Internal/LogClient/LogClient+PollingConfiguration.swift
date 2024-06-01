@@ -19,7 +19,7 @@ extension LogClient {
         /// Bool whether the poller is enabled.
         var isEnabled: Bool = false
 
-        /// The current polling interval. Defaults to ``PollingInterval/medium``
+        /// The current polling interval. Defaults to ``PollingInterval/medium``.
         /// - See: ``PollingInterval``
         var pollingInterval: PollingInterval
         
