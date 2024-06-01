@@ -100,7 +100,7 @@ open class LogDriver: Equatable {
     /// Will assess the given log entry against the current log filters set and return `true` if all filters are valid.
     /// - Parameters:
     ///   - subsystem: The subsystem of the logger the entry was made from.
-    ///   - category: The category of the logger the entry was made from.
+    ///   - category: The category of the logger the entry was made from
     /// - Returns: `Bool`
     func isValidLogSource(subsystem: String, category: String) -> Bool {
         guard !logSources.isEmpty else { return true }
@@ -115,25 +115,26 @@ open class LogDriver: Equatable {
             }
         })
     }
-
-    /// Will assess the given log entry and return the expected ``OSLogEntryLog`` if valid for the driver.
-    /// - Parameter entry: The log entry to assess.
-    /// - Returns: Bool flag if the log was processed
-    func processLogIfValid(_ log: OSLogEntryLog) {
-        guard isValidLogSource(subsystem: log.subsystem, category: log.category) else { return }
-        let logLevel = LogLevel(log.level)
-        #if os(macOS)
-        processLog(
-            level: logLevel,
-            subsystem: log.subsystem,
-            category: log.category,
-            date: log.date,
-            message: log.composedMessage,
-            components: log.components
-        )
-        #else
-        processLog(level: logLevel, subsystem: log.subsystem, category: log.category, date: log.date, message: log.composedMessage)
-        #endif
+    
+    /// Will assess the given log items, and for each valid log item, invoke the ``processLog(level:subsystem:category:date:message:)`` method.
+    /// - Parameter logs: The log items to process.
+    func processLogs(_ logs: [OSLogEntryLog]) {
+        let valids = logs.filter { isValidLogSource(subsystem: $0.subsystem, category: $0.category) }
+        for log in valids {
+            let logLevel = LogLevel(log.level)
+            #if os(macOS)
+            processLog(
+                level: logLevel,
+                subsystem: log.subsystem,
+                category: log.category,
+                date: log.date,
+                message: log.composedMessage,
+                components: log.components
+            )
+            #else
+            processLog(level: logLevel, subsystem: log.subsystem, category: log.category, date: log.date, message: log.composedMessage)
+            #endif
+        }
     }
 
     // MARK: - Overrides
