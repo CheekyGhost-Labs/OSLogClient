@@ -81,7 +81,7 @@ While the intended usage of the library is to use the `OSLogClient` entry point,
 let logStore = OSLogStore(scope: .currentProcessIdentifier)
 let client = try LogClient(pollingInterval: .medium, logStore: logStore)
 ```
-**Note:** This is provided for those edge case scenarios where you need to work with your own intance/s. Please keep in mind that the `OSLogClient` entry point will still be functional and available in these setups.
+**Note:** This is provided for those edge case scenarios where you need to work with your own instance/s. Please keep in mind that the `OSLogClient` entry point will still be functional and available in these setups.
 
 ## Subclassing LogDriver:
 
