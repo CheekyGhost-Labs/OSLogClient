@@ -17,7 +17,7 @@ extension Sequence {
         }
     }
 
-    /// Performs the given operation on each element with concurrently using async/await
+    /// Performs the given operation on each element concurrently using async/await.
     /// - Parameter operation: The operation to invoke.
     func concurrentForEach(_ operation: @escaping (Element) async -> Void) async {
         await withTaskGroup(of: Void.self) { group in
