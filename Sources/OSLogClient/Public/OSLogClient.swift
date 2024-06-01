@@ -109,7 +109,7 @@ public final class OSLogClient {
     /// Will update the time between polls to the given interval.
     ///
     /// **Note:** If a poll is currently in-progress the interval will be applied once completed.
-    /// - Parameter interval: The interval to poll at
+    /// - Parameter interval: The interval to poll at.
     /// - SeeAlso: ``PollingInterval``
     public static func setPollingInterval(_ interval: PollingInterval) async {
         await client.setPollingInterval(interval)
