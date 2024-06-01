@@ -82,7 +82,7 @@ public final class OSLogClient {
         }
     }
 
-    /// The most recent date-time of a processed/polled log
+    /// The most recent date-time of a processed/polled log.
     public static var lastPolledDate: Date? {
         get async {
             await client.lastPolledDate
