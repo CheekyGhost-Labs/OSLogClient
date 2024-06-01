@@ -182,7 +182,7 @@ public class LogClient {
 
     /// Will assess the given entry and ensure it is both a valid `OSLogEntryLog` instance.
     /// - Parameter entry: The entry to assess.
-    /// - Returns: `OSLogEntryLog` or `nil`
+    /// - Returns: `OSLogEntryLog` or `nil`.
     func validateLogEntry(_ entry: OSLogEntry) -> OSLogEntryLog? {
         entry as? OSLogEntryLog
     }
