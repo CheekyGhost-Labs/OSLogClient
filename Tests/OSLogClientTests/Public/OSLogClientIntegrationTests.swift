@@ -5,12 +5,11 @@
 //  Copyright © 2023 CheekyGhost Labs. All rights reserved.
 //
 
-import XCTest
 import OSLog
 @testable import OSLogClient
+import XCTest
 
 final class OSLogClientIntegrationTests: XCTestCase {
-
     let subsystem = "com.cheekyghost.OSLogClient.tests"
     let logCategory = "tests"
     var logClient: LogClient!
@@ -25,11 +24,11 @@ final class OSLogClientIntegrationTests: XCTestCase {
         logClient = LogClient(pollingInterval: .custom(1), lastProcessedStrategy: lastProcessedStrategy, logStore: logStore)
         logDriverSpy = LogDriverSpy(
             id: "unit-tests",
-            logSources: [.subsystem("com.cheekyghost.OSLogClient.tests")]
+            logFilters: [.subsystem("com.cheekyghost.OSLogClient.tests")]
         )
         logDriverSpyTwo = LogDriverSpy(
             id: "unit-tests-two",
-            logSources: [.subsystemAndCategories(subsystem: "com.cheekyghost.OSLogClient.tests", categories: ["tests"])]
+            logFilters: [.subsystem("com.cheekyghost.OSLogClient.tests", categories: "tests")]
         )
         OSLogClient._client = logClient
     }

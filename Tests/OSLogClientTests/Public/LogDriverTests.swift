@@ -1,15 +1,14 @@
 //
 //  LogDriverTests.swift
-//  
+//
 //
 //  Copyright © 2023 CheekyGhost Labs. All rights reserved.
 //
 
-import XCTest
 @testable import OSLogClient
+import XCTest
 
 final class LogDriverTests: XCTestCase {
-
     // MARK: - Properties
 
     var instanceUnderTest: LogDriver!
@@ -27,9 +26,9 @@ final class LogDriverTests: XCTestCase {
     }
 
     func test_isLogValid_subsystemFilter_willReturnExpectedResults() {
-        instanceUnderTest.addLogSources([
+        instanceUnderTest.addLogFilters([
             .subsystem("system-one"),
-            .subsystem("system-two")
+            .subsystem("system-two"),
         ])
         XCTAssertTrue(instanceUnderTest.isValidLogSource(subsystem: "system-one", category: "any"))
         XCTAssertTrue(instanceUnderTest.isValidLogSource(subsystem: "system-two", category: "any"))
@@ -37,10 +36,11 @@ final class LogDriverTests: XCTestCase {
     }
 
     func test_isLogValid_subsystemAndCategoriesFilter_willReturnExpectedResults() {
-        instanceUnderTest.addLogSources([
-            .subsystemAndCategories(subsystem: "system-one", categories: ["cat-ui"]),
-            .subsystemAndCategories(subsystem: "system-two", categories: ["cat-api", "cat-errors"]),
-            .subsystemAndCategories(subsystem: "system-three", categories: ["cat-ui", "cat-api", "cat-errors"]),
+        instanceUnderTest.addLogFilters([
+            .subsystem("system-one", categories: "cat-ui"),
+            .subsystem("system-one", categories: "cat-ui"),
+            .subsystem("system-two", categories: "cat-api", "cat-errors"),
+            .subsystem("system-three", categories: "cat-ui", "cat-api", "cat-errors"),
         ])
         XCTAssertTrue(instanceUnderTest.isValidLogSource(subsystem: "system-one", category: "cat-ui"))
         XCTAssertFalse(instanceUnderTest.isValidLogSource(subsystem: "system-one", category: "cat-api"))
@@ -57,9 +57,9 @@ final class LogDriverTests: XCTestCase {
     }
 
     func test_isLogValid_mixedFilters_willReturnExpectedResults() {
-        instanceUnderTest.addLogSources([
+        instanceUnderTest.addLogFilters([
             .subsystem("system-one"),
-            .subsystemAndCategories(subsystem: "system-two", categories: ["cat-ui", "cat-api"]),
+            .subsystem("system-two", categories: ["cat-ui", "cat-api"]),
         ])
         XCTAssertTrue(instanceUnderTest.isValidLogSource(subsystem: "system-one", category: "cat-ui"))
         XCTAssertTrue(instanceUnderTest.isValidLogSource(subsystem: "system-one", category: "cat-api"))
