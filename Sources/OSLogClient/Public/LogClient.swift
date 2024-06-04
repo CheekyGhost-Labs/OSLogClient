@@ -267,9 +267,9 @@ public actor LogClient {
      Actors don't support convenience init. This internal init is used to inject a custom process info provider for facilitating
      some unit test scenarios.
 
-     Did look at a protocol driven approach using the `AnyActor` but the property declaration limitations would cause non-isolated
-     compile errors. Might be a way to support, but I could not derive how at this time, so until then have put these methods in along
-     with an internal-only process info environment provider protocol to decorate various methods to facilitate unit testing where needed.
+     Did look at a protocol driven approach using the `: Actor` conformance, but would still not be able to subclass LogClient as
+     it is an actor. Instead I have put these methods in along with an internal-only process info environment provider protocol to
+     decorate various methods to facilitate unit testing where needed. Can tidy things up in future work.
      */
 
     /// Internal `ProcessInfoProvider` conforming instance used to facilitate some unit test scenarios
