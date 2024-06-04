@@ -40,10 +40,25 @@ try OSLogClient.initialize(pollingInterval: .short)
 
 // Register your custom log driver
 let myDriver = MyLogDriver(id: "myLogDriver")
-OSLogClient.registerDriver(myDriver)
+await OSLogClient.registerDriver(myDriver)
 
 // Start polling
-OSLogClient.startPolling()
+await OSLogClient.startPolling()
+```
+
+**Note:** If you **are not** using structured concurrency yet (or still adopting etc) you will need to run your registrations and invocations within a task. Below is a contrived example, you should consider task lifecycle and status etc:
+
+```swift
+try OSLogClient.initialize(pollingInterval: .short)
+
+let setupTask = Task(priority: .userInitiated) {
+    // Register your custom log driver
+    let myDriver = MyLogDriver(id: "myLogDriver")
+    await OSLogClient.registerDriver(myDriver)
+
+    // Start polling
+    await OSLogClient.startPolling()
+}
 ```
 
 With just these three steps, `OSLogClient` begins monitoring logs from `OSLog` and forwards them to your registered log drivers, leaving you to use `OSLog.Logger` instances as normal:
@@ -59,6 +74,14 @@ when your driver gets the log message, it will be the processed message that ens
 - `"Password '<private>' did not pass validation"`
 
 ## Managing your own LogClient instance:
+
+While the intended usage of the library is to use the `OSLogClient` entry point, you can initialize your own intance of the `LogClient` type to maintain yourself:
+
+```swift
+let logStore = OSLogStore(scope: .currentProcessIdentifier)
+let client = try LogClient(pollingInterval: .medium, logStore: logStore)
+```
+**Note:** This is provided for those edge case scenarios where you need to work with your own instance/s. Please keep in mind that the `OSLogClient` entry point will still be functional and available in these setups.
 
 ## Subclassing LogDriver:
 
