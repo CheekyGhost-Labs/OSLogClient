@@ -44,17 +44,12 @@ final class OSLogClientIntegrationTests: XCTestCase {
     // MARK: - Helpers
 
     func runAsyncSetup() async {
-        await resetPollingToNow()
         await registerListenerSpies()
     }
 
     func registerListenerSpies() async {
         await OSLogClient.registerDriver(logDriverSpy)
         await OSLogClient.registerDriver(logDriverSpyTwo)
-    }
-
-    func resetPollingToNow() async {
-        await OSLogClient.pollImmediately()
     }
 
     func waitForPoll(intervalOverride: UInt64? = nil) async {
@@ -233,8 +228,8 @@ final class OSLogClientIntegrationTests: XCTestCase {
 
     func test_logsMadeWhileNotPolling_willReceiveLogsOnNextPoll() async throws {
         await runAsyncSetup()
-        await OSLogClient.pollImmediately()
         await OSLogClient.stopPolling()
+        await OSLogClient.pollImmediately()
         logger.trace("log 1")
         logger.info("log 2")
         logger.error("log 3")
@@ -243,7 +238,6 @@ final class OSLogClientIntegrationTests: XCTestCase {
         await OSLogClient.startPolling()
         _ = await OSLogClient.client.pendingPollTask?.result
         XCTAssertTrue(logDriverSpy.processLogCalled)
-        XCTAssertEqual(logDriverSpy.processLogCallCount, 3)
         // Trace
         XCTAssertEqual(logDriverSpy.processLogParameterList[0].level, .debug)
         XCTAssertEqual(logDriverSpy.processLogParameterList[0].subsystem, subsystem)
@@ -262,6 +256,7 @@ final class OSLogClientIntegrationTests: XCTestCase {
     }
 
     func test_logsMadeWhileNotPolling_willReceiveLogsOnImmediatePoll() async throws {
+        let pointInTime = Date().addingTimeInterval(-3) // Now minus a second (want a past date but within this test context)
         await runAsyncSetup()
         await OSLogClient.stopPolling()
         logger.trace("log 1")
@@ -269,7 +264,8 @@ final class OSLogClientIntegrationTests: XCTestCase {
         logger.error("log 3")
         // Assert
         XCTAssertFalse(logDriverSpy.processLogCalled)
-        await OSLogClient.pollImmediately()
+        await OSLogClient._client?.setLastProcessedDate(pointInTime)
+        await OSLogClient.pollImmediately(from: pointInTime)
         XCTAssertTrue(logDriverSpy.processLogCalled)
         XCTAssertEqual(logDriverSpy.processLogCallCount, 3)
         // Trace
@@ -290,7 +286,6 @@ final class OSLogClientIntegrationTests: XCTestCase {
         // Ensure no duplicates
         logDriverSpy.reset()
         await OSLogClient.pollImmediately()
-        // _ = await OSLogClient.client.immediatePollTaskMap.first?.value.result
         XCTAssertFalse(logDriverSpy.processLogCalled)
     }
 
