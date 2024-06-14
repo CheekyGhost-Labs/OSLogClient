@@ -98,13 +98,13 @@ class TextLogDriver: LogDriver {
 	
     // MARK: - Lifecycle
 	
-    required init(id: String, logFileUrl: URL, logSources: [LogSource] = []) {
+    required init(id: String, logFileUrl: URL, logFilters: [LogFilter] = []) {
         self.logFileUrl = logFileUrl
-        super.init(id: id, logSources: logSources)
+        super.init(id: id, logFilters: logFilters)
     }
     
-    required init(id: String, logSources: [LogDriver.LogSource] = []) {
-        fatalError("init(id:logSources:) has not been implemented")
+    required init(id: String, logFilters: [LogFilter] = []) {
+        fatalError("init(id:logFilters:) has not been implemented")
     }
 	
     // MARK: - Overrides
@@ -130,29 +130,23 @@ class TextLogDriver: LogDriver {
 }
 ```
 
-## Filtering Logs with LogSource Filters
+## Filtering Logs with LogFilter
 
-Instead of only assessing log level, date, and category in the `processLog` method, you can fine-tune which logs should be processed by a `LogDriver` instance by specifying valid `LogSource` enum cases.
+Instead of only assessing log level, date, and category in the `processLog` method, you can fine-tune which logs should be processed by a `LogDriver` instance by specifying valid `LogFilter` conditions.
 
 If log filters are specified (i.e., the list isn't empty), they're used to evaluate incoming log entries, ensuring there's a matching filter.
 
-Currently, two source options are supported:
+See the `LogFilter` and `LogCategoryFilter` documentation for supported options.
 
-- `.subsystem(String)`: Includes logs where the `subsystem` matches the provided string.
-- `.subsystemAndCategories(subsystem: String, categories: [String])`: Includes logs where the `subsystem` matches the provided string **and** the log `category` is in the `categories` array.
-
-For instance, to configure a log driver to only receive `ui` and `api` log entries:
+For example, to configure a log driver to only receive `ui` and `api` log entries:
 
 ```swift
 let apiLogger = Logger(subsystem: "com.company.AppName", category: "api")
 let uiLogger = Logger(subsystem: "com.company.AppName", category: "ui")
 let storageLogger = Logger(subsystem: "com.vendor.AppName", category: "storage")
 
-myLogDriver.addLogSources([
-  .subsystemAndCategories(
-    subsystem: "com.company.AppName",
-    categories: ["ui", "api"]
-  )
+myLogDriver.addLogFilters([
+  .subsystem("com.company.AppName", categories: "ui", "api")
 ])
 ```
 

@@ -10,15 +10,9 @@ import OSLog
 
 /// `LogDriver` instances are responsible for handling processed os logs.
 /// Instances, when registered with the ``OSLogClient`` instance, will be sent logs from the `OSLogStore`.
-/// If  ``LogDriver/LogSource`` enums are provided, any incoming logs will be assessed against the log source rules and ignored if no matches are found.
+/// If  ``LogFilter``s are provided any incoming logs will be assessed against the filter rules and ignored if no matches are found.
 open class LogDriver: Equatable {
-
     // MARK: - Supplementary
-
-    public enum LogSource: Equatable {
-        case subsystem(String)
-        case subsystemAndCategories(subsystem: String, categories: [String])
-    }
 
     /// Enumeration of supported log levels.
     public enum LogLevel: String, CaseIterable {
@@ -64,63 +58,87 @@ open class LogDriver: Equatable {
 
     /// Unique identifier for the driver.
     public let id: String
-    
-    /// Array of log sources to restrict logs sent to the `processLog(...)` method.
+
+    /// Array of log filters to restrict logs sent to the ``processLog(level:subsystem:category:date:message:)``
+    /// or ``processLog(level:subsystem:category:date:message:components:)`` method.
     ///
     /// Defaults to no filters.
-    /// **Note:** A log is considered valid if **any** of the sources match the incoming log subsystem and category.
-    /// - SeeAlso: ``LogDriver/LogSource``
-    private(set) public var logSources: [LogSource]
+    /// **Note:** A log is considered valid if **any** of the filters match the incoming log subsystem and category.
+    /// - SeeAlso: ``LogFilter``
+    public private(set) var logFilters: Set<LogFilter>
 
     // MARK: - Lifecycle
 
-    public required init(id: String, logSources: [LogSource] = []) {
+    public required init(id: String, logFilters: Set<LogFilter> = []) {
         self.id = id
-        self.logSources = logSources
+        self.logFilters = logFilters
+    }
+
+    public convenience init(id: String, logFilters: LogFilter...) {
+        self.init(id: id, logFilters: Set(logFilters))
     }
 
     // MARK: - Helpers
-    
+
+    /// Will add the given filter to the ``LogDriver/logFilters`` set which are used to assess logs before they are sent to the `processLog(...)` method.
+    /// - Parameter filter: Filter to add.
+    public final func addLogFilter(_ filter: LogFilter) {
+        logFilters.insert(filter)
+    }
+
     /// Will add the given filters to the ``LogDriver/logFilters`` set which are used to assess logs before they are sent to the `processLog(...)` method.
     /// - Parameter filters: Array of filters to add.
-    public final func addLogSources(_ filters: [LogSource]) {
-        filters.forEach {
-            if !logSources.contains($0) {
-                logSources.append($0)
-            }
+    public final func addLogFilters(_ filters: [LogFilter]) {
+        for filter in filters {
+            logFilters.insert(filter)
+        }
+    }
+
+    /// Will add the given filters to the ``LogDriver/logFilters`` set which are used to assess logs before they are sent to the `processLog(...)` method.
+    /// - Parameter filters: Array of filters to add.
+    public final func addLogFilters(_ filters: LogFilter...) {
+        addLogFilters(filters)
+    }
+
+    /// Will remove the given filter from the ``LogDriver/logFilters`` set which are assessed before logs are sent to the `processLog(...)` method.
+    /// - Parameter filters: Filter to remove.
+    public final func removeLogFilters(_ filter: LogFilter) {
+        logFilters.remove(filter)
+    }
+
+    /// Will remove the given filters from the ``LogDriver/logFilters`` set which are assessed before logs are sent to the `processLog(...)` method.
+    /// - Parameter filters: Array of filters to remove.
+    public final func removeLogFilters(_ filters: [LogFilter]) {
+        for filter in filters {
+            logFilters.remove(filter)
         }
     }
 
     /// Will remove the given filters from the ``LogDriver/logFilters`` set which are assessed before logs are sent to the `processLog(...)` method.
     /// - Parameter filters: Array of filters to remove.
-    public final func removeLogSources(_ filters: [LogSource]) {
-        logSources.removeAll(where: { filters.contains($0) })
+    public final func removeLogFilters(_ filters: LogFilter...) {
+        removeLogFilters(filters)
     }
 
-    /// Will assess the given log entry against the current log filters set and return `true` if all filters are valid.
+    /// Will assess the given log entry against the current log filters set and return `true` if all filters are valid or none were defined.
     /// - Parameters:
     ///   - subsystem: The subsystem of the logger the entry was made from.
     ///   - category: The category of the logger the entry was made from
-    /// - Returns: `Bool`
+    /// - Returns: Returns `true` if no ``logFilters`` are defined or one of the filters evaluates `true`. Otherwise returns `false`.
     func isValidLogSource(subsystem: String, category: String) -> Bool {
-        guard !logSources.isEmpty else { return true }
-        return logSources.contains(where: {
-            switch $0 {
-            case .subsystem(let system):
-                return system.lowercased() == subsystem.lowercased()
-            case .subsystemAndCategories(let system, let categories):
-                let systemValid = system.lowercased() == subsystem.lowercased()
-                let categoryValid = categories.contains(where: { $0.lowercased() == category.lowercased() })
-                return systemValid && categoryValid
-            }
-        })
+        if logFilters.isEmpty {
+            return true // No filters defined, the log is valid
+        }
+        for filter in logFilters where filter.evaluate(againstSubsystem: subsystem, category: category) {
+            return true
+        }
+        return false
     }
     
     /// Will assess the given log items, and for each valid log item, invoke the ``processLog(level:subsystem:category:date:message:)`` method.
     /// - Parameter logs: The log items to process.
     func processLogs(_ logs: [OSLogEntryLog]) {
-        let valids = logs.filter { isValidLogSource(subsystem: $0.subsystem, category: $0.category) }
-        for log in valids {
+        for log in logs where isValidLogSource(subsystem: log.subsystem, category: log.category) {
             let logLevel = LogLevel(log.level)
             #if os(macOS)
             processLog(
@@ -139,7 +157,7 @@ open class LogDriver: Equatable {
 
     // MARK: - Overrides
 
-    #if os(macOS)
+#if os(macOS)
     /// Called when a log is detected that matches the subsystem and whose category is contained within the `categories` array.
     /// - Parameters:
     ///   - level: ``LogLevel`` type representing the underlying `OSLogEntryLog.Level`
@@ -151,7 +169,7 @@ open class LogDriver: Equatable {
     open func processLog(level: LogLevel, subsystem: String, category: String, date: Date, message: String, components: [OSLogMessageComponent]) {
         // no-op
     }
-    #else
+#else
     /// Called when a log is detected that matches the subsystem and whose category is contained within the `categories` array.
     /// - Parameters:
     ///   - level: ``LogLevel`` type representing the underlying `OSLogEntryLog.Level`
@@ -162,7 +180,7 @@ open class LogDriver: Equatable {
     open func processLog(level: LogLevel, subsystem: String, category: String, date: Date, message: String) {
         // no-op
     }
-    #endif
+#endif
 
     // MARK: - Equatable
 
