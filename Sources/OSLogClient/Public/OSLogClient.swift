@@ -45,82 +45,149 @@ public final class OSLogClient {
 
     /// Will initialize and configure the client to poll and broadcast logs to registered drivers.
     /// - Parameter logStore: Optional ``OSLogStore`` instance to poll. Default is assigned based on ``OSLogStore/Scope/currentProcessIdentifier``
-    public static func initialize(pollingInterval: PollingInterval = .medium, logStore: OSLogStore? = nil) throws {
+    public static func initialize(
+        pollingInterval: PollingInterval = .medium,
+        lastProcessedStrategy: LastProcessedStrategy = .default,
+        logStore: OSLogStore? = nil
+    ) throws {
         guard _client == nil else {
             throw OSLogClientError.clientAlreadyInitialized
         }
         do {
-            _client = try LogClient(pollingInterval: pollingInterval, logStore: logStore)
+            let logStore = try logStore ?? OSLogStore(scope: .currentProcessIdentifier)
+            _client = LogClient(pollingInterval: pollingInterval, lastProcessedStrategy: lastProcessedStrategy, logStore: logStore)
         } catch {
             throw OSLogClientError.unableToLoadLogStore(error: error.localizedDescription)
         }
     }
 
-    /// Internal polling timer used to invoke `OSLogStore` lookups.
+    // MARK: - Getters: Immutable Configs
+
+    /// The current polling interval.
+    /// - See: ``PollingInterval``
     public static var pollingInterval: PollingInterval {
         get {
             client.pollingInterval
         }
-        set {
-            client.pollingInterval = newValue
+    }
+
+    /// The strategy being used when loading, updating, and working with the last processed date.
+    /// - See: ``LastProcessedStrategy``
+    public static var lastProcessedStrategy: LastProcessedStrategy {
+        get {
+            client.lastProcessedStrategy
         }
     }
+
+    // MARK: - Getters: Mutable Settings
+
+    /// Bool whether polling is currently enabled or not.
+    public static var isEnabled: Bool {
+        get async {
+            await client.isEnabled
+        }
+    }
+
+    /// Bool flag indicating whether polling should cease if there are no registered drivers.
+    ///
+    /// - Note: The inverse also applies, in that if drivers are registered polling will start again
+    /// if the ``OSLogClient/isEnabled`` flag is `true`.
+    /// - Note: Default is `true`
+    public static var shouldPauseIfNoRegisteredDrivers: Bool {
+        get async {
+            await client.shouldPauseIfNoRegisteredDrivers
+        }
+    }
+
+    /// The most recent date-time that the log store was successfully queried and processed.
+    public static var lastProcessedDate: Date? {
+        get async {
+            await client.lastProcessedDate
+        }
+    }
+
+    // MARK: - Helpers Convenience
 
     /// Returns `false` when the ``OSLogClient/initialize(pollingInterval:logStore:)`` method **has not been invoked**
     public static var isInitialized: Bool {
         _client != nil
     }
 
-    /// Will return `true` when the client is actively polling for logs.
-    ///
-    /// You can start/stop polling by invoking the ``OSLogClient/startPolling()`` and ``OSLogClient/stopPolling()`` methods.
-    public static var isPolling: Bool {
-        client.isPollingEnabled
-    }
+    // MARK: - Helpers: Polling
 
     /// Will start polling logs at the assigned interval.
-    public static func startPolling() {
-        client.startPolling()
+    public static func startPolling() async {
+        await client.startPolling()
     }
 
     /// Will stop polling logs.
-    public static func stopPolling() {
-        client.stopPolling()
+    public static func stopPolling() async {
+        await client.stopPolling()
     }
     
+    /// Will update the time between polls to the given interval.
+    ///
+    /// - Note: If a poll is currently in-progress the interval will be applied once completed. This will
+    /// re-build the shared convenience client as the ``LogClient/pollingInterval`` is immutable.
+    ///
+    /// - Parameter interval: The interval to poll at.
+    /// - SeeAlso: ``PollingInterval``
+    public static func setPollingInterval(_ interval: PollingInterval) async {
+        // Resolve current settings
+        let currentIsEnabled = await client.isEnabled
+        // Build new client instance
+        let newClient = await LogClient(
+            pollingInterval: interval,
+            drivers: client.drivers,
+            lastProcessedStrategy: client.lastProcessedStrategy,
+            logStore: client.logStore,
+            logger: client.logger,
+            processInfoEnvironmentProvider: client.processInfoEnvironmentProvider
+        )
+        // Assign non-isolated
+        await newClient.setLastProcessedDate(client.lastProcessedDate)
+        await newClient.setShouldPauseIfNoRegisteredDrivers(client.shouldPauseIfNoRegisteredDrivers)
+        // Assign new shared client
+        _client = newClient
+        // Enable if was enabled previously
+        if currentIsEnabled {
+            await newClient.startPolling()
+        }
+    }
+
     /// Will force an immediate poll of logs on a detached task. The same log processing and broadcasting to drivers will
     /// occur as per the interval based polling.
     ///
     /// **Note:** This does not reset, delay, or otherwise alter the current polling interval (or scheduled tasks)
     /// - Parameter date: Optional date to query from. Leave `nil` to query from the last time logs were polled (default behaviour).
-    public static func pollImmediately(from date: Date? = nil) {
-        client.forcePoll(from: date)
+    public static func pollImmediately(from date: Date? = nil) async {
+        await client.pollLatestLogs(from: date)
     }
+
+    // MARK: - Helpers: Drivers
 
     /// Will register the given driver instance to receive any polled logs.
     ///
     /// **Note:** The client will hold a strong reference to the driver instance.
     /// - Parameter driver: The driver to register
-    public static func registerDriver(_ driver: LogDriver) {
-        Task.detached(priority: .userInitiated) {
-            await client.registerDriver(driver)
-        }
+    public static func registerDriver(_ driver: LogDriver) async {
+        await client.registerDriver(driver)
     }
 
     /// Will register the given array of driver instances to receive any polled logs.
     ///
     /// **Note:** The client will hold a strong reference to the driver instances.
     /// - Parameter drivers: Array of ``LogDriver`` instances.
-    public static func registerDrivers(_ drivers: [LogDriver]) {
-        drivers.forEach(registerDriver(_:))
+    public static func registerDrivers(_ drivers: [LogDriver]) async {
+        for driver in drivers {
+            await registerDriver(driver)
+        }
     }
 
     /// Will deregister the driver with the given identifier from receiving an logs.
     /// - Parameter id: The id of the driver to deregister.
-    public static func deregisterDriver(withId id: String) {
-        Task.detached(priority: .userInitiated) {
-            await client.deregisterDriver(withId: id)
-        }
+    public static func deregisterDriver(withId id: String) async {
+        await client.deregisterDriver(withId: id)
     }
 
     /// Indicates whether a driver with a specified identifier is registered.
@@ -128,5 +195,31 @@ public final class OSLogClient {
     /// - Returns: A `Bool` indicating whether the a driver with the specified identifier is registered.
     public static func isDriverRegistered(withId id: String) async -> Bool {
         await client.isDriverRegistered(withId: id)
+    }
+
+    /// Will assign the given Bool flag to the ``OSLogClient/shouldPauseIfNoRegisteredDrivers`` property.
+    ///
+    /// - Note: When `true` if all drivers are deregistered, polling will cease until valid drivers are registered again.
+    /// - Parameter flag: Bool whether enabled.
+    public static func setShouldPauseIfNoRegisteredDrivers(_ flag: Bool) async {
+        await client.setShouldPauseIfNoRegisteredDrivers(flag)
+    }
+
+    // MARK: - Deprecated
+
+    /// The most recent date-time of a processed/polled log.
+    @available(*, deprecated, renamed: "lastProcessedDate", message: "`lastPolledDate` was an inaccurate name. Please use `lastProcessedDate`")
+    public static var lastPolledDate: Date? {
+        get async {
+            await client.lastProcessedDate
+        }
+    }
+
+    /// Bool whether polling is currently active or not.
+    @available(*, deprecated, renamed: "isEnabled", message: "`isPolling` has been renamed. Please use `isEnabled` insread")
+    public static var isPolling: Bool {
+        get async {
+            await client.isEnabled
+        }
     }
 }

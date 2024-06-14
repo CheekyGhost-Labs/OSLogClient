@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0] - 2024-15-06
+
+- Enforcing structured concurrency by [@theoriginalbit #17](https://github.com/CheekyGhost-Labs/OSLogClient/pull/17)
+- Enforcing structured concurrency by [@mobrien-ghost #16](https://github.com/CheekyGhost-Labs/OSLogClient/pull/16)
+
 ## [0.5.0] - 2024-28-05
 
 - [Feature] Add Driver Registration Check to OSLogClient [@nickkohrn in #15](https://github.com/CheekyGhost-Labs/OSLogClient/pull/15)

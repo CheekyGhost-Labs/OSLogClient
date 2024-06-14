@@ -1,0 +1,34 @@
+{
+  "configurations" : [
+    {
+      "id" : "66D9C446-B997-4146-81EE-F41576C3B02A",
+      "name" : "Test Scheme Action",
+      "options" : {
+        "environmentVariableEntries" : [
+          {
+            "key" : "OSLOGCLIENT_UNIT_TESTING",
+            "value" : "1"
+          }
+        ]
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "environmentVariableEntries" : [
+      {
+        "key" : "UNIT_TESTING",
+        "value" : "1"
+      }
+    ]
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:",
+        "identifier" : "OSLogClientTests",
+        "name" : "OSLogClientTests"
+      }
+    }
+  ],
+  "version" : 1
+}

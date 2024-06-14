@@ -40,10 +40,25 @@ try OSLogClient.initialize(pollingInterval: .short)
 
 // Register your custom log driver
 let myDriver = MyLogDriver(id: "myLogDriver")
-OSLogClient.registerDriver(myDriver)
+await OSLogClient.registerDriver(myDriver)
 
 // Start polling
-OSLogClient.startPolling()
+await OSLogClient.startPolling()
+```
+
+**Note:** If you **are not** using structured concurrency yet (or still adopting etc) you will need to run your registrations and invocations within a task. Below is a contrived example, you should consider task lifecycle and status etc:
+
+```swift
+try OSLogClient.initialize(pollingInterval: .short)
+
+let setupTask = Task(priority: .userInitiated) {
+    // Register your custom log driver
+    let myDriver = MyLogDriver(id: "myLogDriver")
+    await OSLogClient.registerDriver(myDriver)
+
+    // Start polling
+    await OSLogClient.startPolling()
+}
 ```
 
 With just these three steps, `OSLogClient` begins monitoring logs from `OSLog` and forwards them to your registered log drivers, leaving you to use `OSLog.Logger` instances as normal:
@@ -60,6 +75,14 @@ when your driver gets the log message, it will be the processed message that ens
 
 ## Managing your own LogClient instance:
 
+While the intended usage of the library is to use the `OSLogClient` entry point, you can initialize your own intance of the `LogClient` type to maintain yourself:
+
+```swift
+let logStore = OSLogStore(scope: .currentProcessIdentifier)
+let client = try LogClient(pollingInterval: .medium, logStore: logStore)
+```
+**Note:** This is provided for those edge case scenarios where you need to work with your own instance/s. Please keep in mind that the `OSLogClient` entry point will still be functional and available in these setups.
+
 ## Subclassing LogDriver:
 
 While the base LogDriver class provides the necessary foundation for handling OS logs, you can easily subclass it for custom processing, such as writing logs to a text file:
@@ -75,13 +98,13 @@ class TextLogDriver: LogDriver {
 	
     // MARK: - Lifecycle
 	
-    required init(id: String, logFileUrl: URL, logSources: [LogSource] = []) {
+    required init(id: String, logFileUrl: URL, logFilters: [LogFilter] = []) {
         self.logFileUrl = logFileUrl
-        super.init(id: id, logSources: logSources)
+        super.init(id: id, logFilters: logFilters)
     }
     
-    required init(id: String, logSources: [LogDriver.LogSource] = []) {
-        fatalError("init(id:logSources:) has not been implemented")
+    required init(id: String, logFilters: [LogFilter] = []) {
+        fatalError("init(id:logFilters:) has not been implemented")
     }
 	
     // MARK: - Overrides
@@ -107,29 +130,23 @@ class TextLogDriver: LogDriver {
 }
 ```
 
-## Filtering Logs with LogSource Filters
+## Filtering Logs with LogFilter
 
-Instead of only assessing log level, date, and category in the `processLog` method, you can fine-tune which logs should be processed by a `LogDriver` instance by specifying valid `LogSource` enum cases.
+Instead of only assessing log level, date, and category in the `processLog` method, you can fine-tune which logs should be processed by a `LogDriver` instance by specifying valid `LogFilter` conditions.
 
 If log filters are specified (i.e., the list isn't empty), they're used to evaluate incoming log entries, ensuring there's a matching filter.
 
-Currently, two source options are supported:
+See the `LogFilter` and `LogCategoryFilter` documentation for supported options.
 
-- `.subsystem(String)`: Includes logs where the `subsystem` matches the provided string.
-- `.subsystemAndCategories(subsystem: String, categories: [String])`: Includes logs where the `subsystem` matches the provided string **and** the log `category` is in the `categories` array.
-
-For instance, to configure a log driver to only receive `ui` and `api` log entries:
+For example, to configure a log driver to only receive `ui` and `api` log entries:
 
 ```swift
 let apiLogger = Logger(subsystem: "com.company.AppName", category: "api")
 let uiLogger = Logger(subsystem: "com.company.AppName", category: "ui")
 let storageLogger = Logger(subsystem: "com.vendor.AppName", category: "storage")
 
-myLogDriver.addLogSources([
-  .subsystemAndCategories(
-    subsystem: "com.company.AppName",
-    categories: ["ui", "api"]
-  )
+myLogDriver.addLogFilters([
+  .subsystem("com.company.AppName", categories: "ui", "api")
 ])
 ```
 
@@ -175,7 +192,7 @@ Currently, OSLogClient supports Swift Package Manager (SPM).
 To add OSLogClient to your project, add the following line to your dependencies in your Package.swift file:
 
 ```swift
-.package(url: "https://github.com/CheekyGhost-Labs/OSLogClient", from: "0.4.0")
+.package(url: "https://github.com/CheekyGhost-Labs/OSLogClient", from: "1.0.0")
 ```
 
 Then, add OSLogClient as a dependency for your target:
