@@ -10,29 +10,28 @@ import Foundation
 
 /// Class that provides configurable polling of an `OSLogStore`.
 /// Valid log items will be sent to any registered ``LogDriver`` instances.
-/// 
+///
 /// Example usage:
 /// ```swift
 /// try OSLogClient.initialize(pollingInterval: .short)
 /// OSLogClient.registerDriver(driverSubclass)
 /// OSLogClient.startPolling()
 /// ```
-/// 
+///
 /// - You must initialize the utility using the ``OSLogClient/initialize(pollingInterval:logStore:)`` method **before use**. Failure
 /// to do this will result in a fatal error being thrown.
-/// 
+///
 /// - You can register ``LogDriver`` instances via the ``OSLogClient/registerDriver(_:)`` method.
-/// 
+///
 /// - By default polling will not automatically start, once you have finished setting up and registering drivers, you can start and stop
 /// polling by using the ``OSLogClient/startPolling()`` and ``OSLogClient/stopPolling()`` methods.
-/// 
-public final class OSLogClient {
-
+///
+public enum OSLogClient {
     // MARK: - Internal
-    
+
     /// Internal shared client instance.
     static var _client: LogClient?
-    
+
     /// Convenience getter for non-optional client instance. If the underlying `_client` instance is `nil` then a fatal error will occur.
     static var client: LogClient {
         guard let instance = _client else {
@@ -66,16 +65,14 @@ public final class OSLogClient {
     /// The current polling interval.
     /// - See: ``PollingInterval``
     public static var pollingInterval: PollingInterval {
-        get {
-            client.pollingInterval
-        }
+        client.pollingInterval
     }
 
     /// The strategy being used when loading, updating, and working with the last processed date.
     /// - See: ``LastProcessedStrategy``
-    public static var lastProcessedStrategy: LastProcessedStrategy {
-        get {
-            client.lastProcessedStrategy
+    public static var lastProcessedStrategy: any LastProcessedStrategy {
+        get async {
+            await client.lastProcessedStrategy
         }
     }
 
@@ -124,7 +121,7 @@ public final class OSLogClient {
     public static func stopPolling() async {
         await client.stopPolling()
     }
-    
+
     /// Will update the time between polls to the given interval.
     ///
     /// - Note: If a poll is currently in-progress the interval will be applied once completed. This will
@@ -145,7 +142,6 @@ public final class OSLogClient {
             processInfoEnvironmentProvider: client.processInfoEnvironmentProvider
         )
         // Assign non-isolated
-        await newClient.setLastProcessedDate(client.lastProcessedDate)
         await newClient.setShouldPauseIfNoRegisteredDrivers(client.shouldPauseIfNoRegisteredDrivers)
         // Assign new shared client
         _client = newClient
