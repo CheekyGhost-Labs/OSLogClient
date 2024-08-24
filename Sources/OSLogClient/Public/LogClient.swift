@@ -20,7 +20,7 @@ public actor LogClient {
 
     /// The strategy to use when loading, updating, and working with the last processed date.
     /// - See: ``LastProcessedStrategy``
-    public let lastProcessedStrategy: LastProcessedStrategy
+    internal(set) public var lastProcessedStrategy: any LastProcessedStrategy
 
     // MARK: - Properties: Settings
 
@@ -38,7 +38,9 @@ public actor LogClient {
     private(set) public var shouldPauseIfNoRegisteredDrivers: Bool = true
 
     /// The most recent date-time of a processed/polled log
-    private(set) public lazy var lastProcessedDate: Date? = loadLastProcessedDate()
+    public var lastProcessedDate: Date? {
+        lastProcessedStrategy.date
+    }
 
     // MARK: - Properties: Drivers
 
@@ -66,7 +68,7 @@ public actor LogClient {
 
     public init(
         pollingInterval: PollingInterval,
-        lastProcessedStrategy: LastProcessedStrategy,
+        lastProcessedStrategy: some LastProcessedStrategy,
         logStore: OSLogStore,
         logger: Logger? = nil
     ) {
@@ -81,7 +83,7 @@ public actor LogClient {
     init(
         pollingInterval: PollingInterval,
         drivers: [LogDriver],
-        lastProcessedStrategy: LastProcessedStrategy,
+        lastProcessedStrategy: some LastProcessedStrategy,
         logStore: OSLogStore,
         logger: Logger? = nil,
         processInfoEnvironmentProvider: ProcessInfoEnvironmentProvider? = nil
@@ -232,33 +234,10 @@ public actor LogClient {
             await self.executePoll()
         }
     }
-
-    // MARK: - Helpers: Last Processed Date
     
-    /// Will assign the `lastProcessedDate` to the given value.
-    ///
-    /// - Note: This will also action any related operations to honour the assigned ``LogClient/lastProcessedStrategy``
-    /// - Parameter date: The date to assign.
-    public func setLastProcessedDate(_ date: Date?) {
-        // Assessing only non-memory supported option for now
-        if case LastProcessedStrategy.userDefaults(let defaultsKey) = lastProcessedStrategy {
-            UserDefaults.standard.setValue(date?.timeIntervalSince1970, forKey: defaultsKey)
-        }
-        lastProcessedDate = date
-    }
-
-    /// Will assess the current `lastProcessedStrategy` and return the last known/stored date.
-    /// - Returns: `Date` or `nil`
-    func loadLastProcessedDate() -> Date? {
-        switch lastProcessedStrategy {
-        case .userDefaults(let defaultsKey):
-            guard let timestamp = UserDefaults.standard.value(forKey: defaultsKey) as? TimeInterval else {
-                return nil
-            }
-            return Date(timeIntervalSince1970: timestamp)
-        case .inMemory:
-            return lastProcessedDate
-        }
+    /// Will assign the ``lastProcessedStrategy/date`` to the given value.
+    func setLastProcessedDate(_ date: Date?) {
+        lastProcessedStrategy.setLastProcessedDate(date)
     }
 
     // MARK: - Internal: Unit Testing Support
@@ -277,7 +256,7 @@ public actor LogClient {
 
     init(
         pollingInterval: PollingInterval,
-        lastProcessedStrategy: LastProcessedStrategy,
+        lastProcessedStrategy: any LastProcessedStrategy,
         logStore: OSLogStore,
         logger: Logger? = nil,
         processInfoEnvironmentProvider: ProcessInfoEnvironmentProvider?
@@ -304,7 +283,7 @@ public actor LogClient {
 
     var _testPollLatestLogsCalled: Bool { _testPollLatestLogsCallCount > 0 }
     var _testPollLatestLogsCallCount: Int = 0
-    var _testPollLatestLogsParameters: (date: Date?, Void)? {_testPollLatestLogsParameterList.last }
+    var _testPollLatestLogsParameters: (date: Date?, Void)? { _testPollLatestLogsParameterList.last }
     var _testPollLatestLogsParameterList: [(date: Date?, Void)] = []
 
     func _testTrackPollLatestLogs(date: Date?) {

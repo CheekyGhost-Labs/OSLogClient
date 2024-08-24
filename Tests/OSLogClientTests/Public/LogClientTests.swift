@@ -1,6 +1,6 @@
 //
 //  LogClientTests.swift
-//  
+//
 //
 //  Copyright © 2023 CheekyGhost Labs. All rights reserved.
 //
@@ -48,7 +48,7 @@ final class LogClientTests: XCTestCase {
 
     // MARK: - Tests: Drivers: Lifecycle
 
-    func test_init_public_willAssignProvidedProperties() async {
+    func test_init_public_willAssignProvidedProperties() async throws {
         let instance = LogClient(
             pollingInterval: .custom(123),
             lastProcessedStrategy: .userDefaults(key: "test-key"),
@@ -56,12 +56,13 @@ final class LogClientTests: XCTestCase {
             logger: logger
         )
         await XCTAssertEqual_async(await instance.pollingInterval, .custom(123))
-        await XCTAssertEqual_async(await instance.lastProcessedStrategy, .userDefaults(key: "test-key"))
+        let strategy = try await XCTUnwrap_async(await instance.lastProcessedStrategy as? UserDefaultsLastProcessedStrategy)
+        await XCTAssertEqual_async(strategy.key, "test-key")
         await XCTAssertTrue_async(await instance.logStore === logStore)
         // Logger does not conform to Equatable (and subsystem/category is unaccessible) :(
     }
 
-    func test_init_internal_willAssignProvidedProperties() async {
+    func test_init_internal_willAssignProvidedProperties() async throws {
         let instance = LogClient(
             pollingInterval: .custom(123),
             drivers: [logDriverSpy, logDriverSpyTwo],
@@ -72,7 +73,8 @@ final class LogClientTests: XCTestCase {
         )
         await XCTAssertEqual_async(await instance.pollingInterval, .custom(123))
         await XCTAssertEqual_async(await instance.drivers, [logDriverSpy, logDriverSpyTwo])
-        await XCTAssertEqual_async(await instance.lastProcessedStrategy, .userDefaults(key: "test-key"))
+        let strategy = try await XCTUnwrap_async(await instance.lastProcessedStrategy as? UserDefaultsLastProcessedStrategy)
+        await XCTAssertEqual_async(strategy.key, "test-key")
         await XCTAssertTrue_async(await instance.logStore === logStore)
         // Logger does not conform to Equatable (and subsystem/category is unaccessible) :(
     }
@@ -106,12 +108,12 @@ final class LogClientTests: XCTestCase {
 
     func test_loadLastProcessedDate_userDefaults_missing_willReturnNil() async {
         UserDefaults.standard.removeObject(forKey: lastProcessedDefaultsKey)
-        await XCTAssertNil_async(await instanceUnderTest.loadLastProcessedDate())
+        await XCTAssertNil_async(await instanceUnderTest.lastProcessedDate)
     }
 
     func test_loadLastProcessedDate_userDefaults_present_willReturnStoredDate() async {
         UserDefaults.standard.setValue(dateStub.timeIntervalSince1970, forKey: lastProcessedDefaultsKey)
-        let result = await instanceUnderTest.loadLastProcessedDate()
+        let result = await instanceUnderTest.lastProcessedDate
         XCTAssertEqual(result?.timeIntervalSince1970, dateStub.timeIntervalSince1970)
     }
 
@@ -124,7 +126,7 @@ final class LogClientTests: XCTestCase {
             processInfoEnvironmentProvider: testProcessInfoProvider
         )
         await instance.setLastProcessedDate(nil)
-        await XCTAssertNil_async(await instance.loadLastProcessedDate())
+        await XCTAssertNil_async(await instance.lastProcessedDate)
     }
 
     func test_loadLastProcessedDate_inMemory_present_willReturnStoredDate() async {
@@ -136,7 +138,7 @@ final class LogClientTests: XCTestCase {
             processInfoEnvironmentProvider: testProcessInfoProvider
         )
         await instance.setLastProcessedDate(dateStub)
-        let result = await instance.loadLastProcessedDate()
+        let result = await instance.lastProcessedDate
         XCTAssertEqual(result?.timeIntervalSince1970, dateStub.timeIntervalSince1970)
     }
 
