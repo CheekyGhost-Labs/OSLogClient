@@ -17,7 +17,7 @@ final class OSLogClientTests: XCTestCase {
     let logger = Logger(subsystem: "com.cheekyghost.OSLogClient", category: "unit-tests")
     let pollingInterval: PollingInterval = .custom(1)
     var logStore: OSLogStore!
-    var lastProcessedStrategy: LastProcessedStrategy!
+    var lastProcessedStrategy: UserDefaultsLastProcessedStrategy!
     let lastProcessedDefaultsKey: String = "test-key"
     var logDriverSpy: LogDriverSpy!
     var logDriverSpyTwo: LogDriverSpy!
@@ -75,7 +75,7 @@ final class OSLogClientTests: XCTestCase {
 
     func test_lastPolledDate_willInvokeUnderlyingClient() async {
         let date = Date().addingTimeInterval(-3600)
-        await logClient.setLastProcessedDate(date)
+        await logClient.lastProcessedStrategy.setLastProcessedDate(date)
         await XCTAssertEqual_async(await OSLogClient.lastProcessedDate?.timeIntervalSince1970, date.timeIntervalSince1970)
     }
 
@@ -146,7 +146,7 @@ final class OSLogClientTests: XCTestCase {
         // Then
         XCTAssertFalse(OSLogClient._client === lastClient)
         await XCTAssertEqual_async(await OSLogClient._client?.pollingInterval, .custom(123))
-        await XCTAssertEqual_async(await OSLogClient._client?.lastProcessedStrategy, await lastClient?.lastProcessedStrategy)
+        await XCTAssertTrue_async(type(of: await OSLogClient._client?.lastProcessedStrategy) == type(of: await lastClient?.lastProcessedStrategy))
         await XCTAssertEqual_async(
             await OSLogClient._client?.lastProcessedDate?.timeIntervalSince1970,
             await lastClient?.lastProcessedDate?.timeIntervalSince1970
