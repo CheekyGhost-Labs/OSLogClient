@@ -15,7 +15,7 @@ open class LogDriver: Equatable {
     // MARK: - Supplementary
 
     /// Enumeration of supported log levels.
-    public enum LogLevel: String, CaseIterable {
+    @frozen public enum LogLevel: String, CaseIterable {
         /// The log level was never specified.
         case undefined
         /// A log level that captures diagnostic information.
