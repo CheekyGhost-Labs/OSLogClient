@@ -13,7 +13,7 @@ public class InMemoryLastProcessedStrategy: LastProcessedStrategy {
     }
 }
 
-extension LastProcessedStrategy where Self == InMemoryLastProcessedStrategy {
+public extension LastProcessedStrategy where Self == InMemoryLastProcessedStrategy {
     static var inMemory: Self {
         Self()
     }

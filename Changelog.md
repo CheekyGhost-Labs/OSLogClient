@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0] - 2024-08-09
+
+- Add frozen to LogLevel enum [@theoriginalbit #21](https://github.com/CheekyGhost-Labs/OSLogClient/pull/21)
+- Fix LastProcessedStrategy extensions were not marked public [@theoriginalbit #20](https://github.com/CheekyGhost-Labs/OSLogClient/pull/20)
+
 ## [1.1.0] - 2024-24-08
 
 - Fix crash caused by in-memory last processed handling being recursive [@theoriginalbit #17](https://github.com/CheekyGhost-Labs/OSLogClient/pull/19)
