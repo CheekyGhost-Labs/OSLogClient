@@ -32,13 +32,13 @@ public struct UserDefaultsLastProcessedStrategy: LastProcessedStrategy {
     }
 }
 
-extension LastProcessedStrategy where Self == UserDefaultsLastProcessedStrategy {
+public extension LastProcessedStrategy where Self == UserDefaultsLastProcessedStrategy {
     static func userDefaults(key: String, defaults: UserDefaults = .standard) -> Self {
         Self(key: key, defaults: defaults)
     }
 
     /// Will return the library default strategy which resolves to ``LastProcessedStrategy/userDefaults(key:)``
-    public static var `default`: Self {
+    static var `default`: Self {
         .userDefaults(key: "com.cheekyghost.axologl.lastProcessed")
     }
 }
