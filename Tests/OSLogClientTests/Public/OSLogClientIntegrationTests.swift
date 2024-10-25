@@ -19,7 +19,7 @@ final class OSLogClientIntegrationTests: XCTestCase {
     var logDriverSpy: LogDriverSpy!
     var logDriverSpyTwo: LogDriverSpy!
 
-    override func setUpWithError() throws {
+    override func setUp() async throws {
         let logStore = try OSLogStore(scope: .currentProcessIdentifier)
         logClient = LogClient(pollingInterval: .custom(1), lastProcessedStrategy: lastProcessedStrategy, logStore: logStore)
         logDriverSpy = LogDriverSpy(
@@ -30,11 +30,10 @@ final class OSLogClientIntegrationTests: XCTestCase {
             id: "unit-tests-two",
             logFilters: [.subsystem("com.cheekyghost.OSLogClient.tests", categories: "tests")]
         )
-        OSLogClient._client = logClient
+        await OSLogClient._client.setLogClient(logClient)
     }
 
-    override func tearDownWithError() throws {
-        try super.tearDownWithError()
+    override func tearDown() async throws {
         logClient = nil
         logDriverSpy = nil
         logDriverSpyTwo = nil
@@ -52,19 +51,19 @@ final class OSLogClientIntegrationTests: XCTestCase {
     }
 
     func waitForPoll(intervalOverride: UInt64? = nil) async {
-        let clientInterval = OSLogClient.pollingInterval.nanoseconds
+        let clientInterval = await OSLogClient.pollingInterval.nanoseconds
         let interval = intervalOverride ?? clientInterval
         try? await Task.sleep(nanoseconds: interval)
     }
 
     // MARK: - Tests: General
 
-    func test_isInitializedGetter_willReturnExpectedValue() {
-        XCTAssertTrue(OSLogClient.isInitialized)
+    func test_isInitializedGetter_willReturnExpectedValue() async {
+        await XCTAssertTrue_async(await OSLogClient.isInitialized)
     }
 
     func test_intervalGetter_willReturnExpectedValue() async {
-        XCTAssertEqual(OSLogClient.pollingInterval, pollingInterval)
+        await XCTAssertEqual_async(await OSLogClient.pollingInterval, pollingInterval)
     }
 
     func test_isPolling_willReturnExpectedValue() async {
@@ -88,7 +87,7 @@ final class OSLogClientIntegrationTests: XCTestCase {
         logger.critical("This is a critical")
         logger.fault("This is a fault")
         logger.log(level: .error, "This is a manual error")
-        _ = await OSLogClient.client.pendingPollTask?.result
+        _ = await OSLogClient._client.logClient.pendingPollTask?.result
         // Assert
         XCTAssertTrue(logDriverSpy.processLogCalled)
         XCTAssertEqual(logDriverSpy.processLogCallCount, 9)
@@ -144,12 +143,12 @@ final class OSLogClientIntegrationTests: XCTestCase {
     func test_logsOverTime_willNotReceiveDuplicateLogs() async throws {
         await runAsyncSetup()
         await OSLogClient.startPolling()
-        _ = await OSLogClient.client.pendingPollTask?.result
+        _ = await OSLogClient._client.logClient.pendingPollTask?.result
         // Log and wait
         logger.trace("log 1")
         logger.info("log 2")
         logger.error("log 3")
-        _ = await OSLogClient.client.pendingPollTask?.result
+        _ = await OSLogClient._client.logClient.pendingPollTask?.result
         // Assert
         XCTAssertTrue(logDriverSpy.processLogCalled)
         XCTAssertEqual(logDriverSpy.processLogCallCount, 3)
@@ -186,17 +185,17 @@ final class OSLogClientIntegrationTests: XCTestCase {
         XCTAssertEqual(logDriverSpyTwo.processLogParameterList[2].category, logCategory)
         XCTAssertEqual(logDriverSpyTwo.processLogParameterList[2].message, "log 3")
         // Continue
-        _ = await OSLogClient.client.pendingPollTask?.result
+        _ = await OSLogClient._client.logClient.pendingPollTask?.result
         XCTAssertEqual(logDriverSpy.processLogCallCount, 3)
         XCTAssertEqual(logDriverSpyTwo.processLogCallCount, 3)
-        _ = await OSLogClient.client.pendingPollTask?.result
+        _ = await OSLogClient._client.logClient.pendingPollTask?.result
         XCTAssertEqual(logDriverSpy.processLogCallCount, 3)
         XCTAssertEqual(logDriverSpyTwo.processLogCallCount, 3)
         logDriverSpy.reset()
         logDriverSpyTwo.reset()
         logger.trace("log 1-2")
         logger.info("log 2-2")
-        _ = await OSLogClient.client.pendingPollTask?.result
+        _ = await OSLogClient._client.logClient.pendingPollTask?.result
         XCTAssertTrue(logDriverSpy.processLogCalled)
         XCTAssertEqual(logDriverSpy.processLogCallCount, 2)
         XCTAssertTrue(logDriverSpyTwo.processLogCalled)
@@ -235,7 +234,7 @@ final class OSLogClientIntegrationTests: XCTestCase {
         // Assert
         XCTAssertFalse(logDriverSpy.processLogCalled)
         await OSLogClient.startPolling()
-        _ = await OSLogClient.client.pendingPollTask?.result
+        _ = await OSLogClient._client.logClient.pendingPollTask?.result
         XCTAssertTrue(logDriverSpy.processLogCalled)
         // Trace
         XCTAssertEqual(logDriverSpy.processLogParameterList[0].level, .debug)
@@ -263,7 +262,7 @@ final class OSLogClientIntegrationTests: XCTestCase {
         logger.error("log 3")
         // Assert
         XCTAssertFalse(logDriverSpy.processLogCalled)
-        await OSLogClient._client?.setLastProcessedDate(pointInTime)
+        await OSLogClient._client.logClient.setLastProcessedDate(pointInTime)
         await OSLogClient.pollImmediately(from: pointInTime)
         XCTAssertTrue(logDriverSpy.processLogCalled)
         XCTAssertEqual(logDriverSpy.processLogCallCount, 3)
@@ -293,12 +292,12 @@ final class OSLogClientIntegrationTests: XCTestCase {
     func test_pollImmediately_whileActivelyPolling_defaultingToLastProcessed_willNotReceiveDuplicateLogs() async throws {
         await runAsyncSetup()
         await OSLogClient.startPolling()
-        _ = await OSLogClient.client.pendingPollTask?.result
+        _ = await OSLogClient._client.logClient.pendingPollTask?.result
         // Log and wait
         logger.trace("log 1")
         logger.info("log 2")
         logger.error("log 3")
-        _ = await OSLogClient.client.pendingPollTask?.result
+        _ = await OSLogClient._client.logClient.pendingPollTask?.result
         // Assert
         XCTAssertTrue(logDriverSpy.processLogCalled)
         XCTAssertEqual(logDriverSpy.processLogCallCount, 3)
@@ -317,9 +316,9 @@ final class OSLogClientIntegrationTests: XCTestCase {
         XCTAssertEqual(logDriverSpy.processLogParameterList[2].subsystem, subsystem)
         XCTAssertEqual(logDriverSpy.processLogParameterList[2].category, logCategory)
         XCTAssertEqual(logDriverSpy.processLogParameterList[2].message, "log 3")
-        _ = await OSLogClient.client.pendingPollTask?.result
+        _ = await OSLogClient._client.logClient.pendingPollTask?.result
         XCTAssertEqual(logDriverSpy.processLogCallCount, 3)
-        _ = await OSLogClient.client.pendingPollTask?.result
+        _ = await OSLogClient._client.logClient.pendingPollTask?.result
         XCTAssertEqual(logDriverSpy.processLogCallCount, 3)
         // Reset spy, log some more items, and poll immediately
         logDriverSpy.reset()
@@ -344,7 +343,7 @@ final class OSLogClientIntegrationTests: XCTestCase {
         await OSLogClient.pollImmediately()
         // _ = await OSLogClient.client.immediatePollTaskMap.first?.value.result
         logDriverSpy.reset()
-        _ = await OSLogClient.client.pendingPollTask?.result
+        _ = await OSLogClient._client.logClient.pendingPollTask?.result
         XCTAssertFalse(logDriverSpy.processLogCalled)
     }
 

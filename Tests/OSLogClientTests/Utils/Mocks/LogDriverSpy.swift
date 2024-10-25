@@ -9,7 +9,7 @@ import Foundation
 import OSLog
 @testable import OSLogClient
 
-class LogDriverSpy: LogDriver {
+class LogDriverSpy: LogDriver, @unchecked Sendable {
 #if os(macOS)
     typealias ProcessLogParameters = (
         level: LogDriver.LogLevel,
