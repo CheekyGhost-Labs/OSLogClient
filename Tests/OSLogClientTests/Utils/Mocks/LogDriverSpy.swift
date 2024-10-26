@@ -10,15 +10,18 @@ import OSLog
 @testable import OSLogClient
 
 class LogDriverSpy: LogDriver, @unchecked Sendable {
+
+    var parameterQueue: DispatchQueue = .init(label: "logs", qos: .userInitiated, attributes: .concurrent)
+
 #if os(macOS)
-    typealias ProcessLogParameters = (
-        level: LogDriver.LogLevel,
-        subsystem: String,
-        category: String,
-        date: Date,
-        message: String,
-        components: [OSLogMessageComponent]
-    )
+    struct ProcessLogParameters: Sendable {
+        var level: LogDriver.LogLevel
+        var subsystem: String
+        var category: String
+        var date: Date
+        var message: String
+        nonisolated(unsafe) var components: [OSLogMessageComponent]
+    }
     var processLogCalled: Bool { processLogCallCount > 0 }
     var processLogCallCount: Int { processLogParameterList.count }
     var processLogParameters: ProcessLogParameters? { processLogParameterList.last }
@@ -32,17 +35,31 @@ class LogDriverSpy: LogDriver, @unchecked Sendable {
         message: String,
         components: [OSLogMessageComponent]
     ) {
-        processLogParameterList.append((level, subsystem, category, date, message, components))
+        let params = ProcessLogParameters(
+            level: level, subsystem: subsystem, category: category, date: date, message: message, components: components
+        )
+        parameterQueue.async(flags: .barrier) { [weak self, params] in
+            self?.processLogParameterList.append(params)
+        }
     }
 #else
-    typealias ProcessLogParameters = (level: LogDriver.LogLevel, subsystem: String, category: String, date: Date, message: String)
+    struct ProcessLogParameters: Sendable {
+        var level: LogDriver.LogLevel
+        var subsystem: String
+        var category: String
+        var date: Date
+        var message: String
+    }
     var processLogCalled: Bool { processLogCallCount > 0 }
     var processLogCallCount: Int { processLogParameterList.count }
     var processLogParameters: ProcessLogParameters? { processLogParameterList.last }
     var processLogParameterList: [ProcessLogParameters] = []
 
     override func processLog(level: LogDriver.LogLevel, subsystem: String, category: String, date: Date, message: String) {
-        processLogParameterList.append((level, subsystem, category, date, message))
+        let params = ProcessLogParameters(level: level, subsystem: subsystem, category: category, date: date, message: message)
+        parameterQueue.async(flags: .barrier) { [weak self, params] in
+            self?.processLogParameterList.append(params)
+        }
     }
 #endif
 
