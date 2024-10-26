@@ -8,7 +8,7 @@
 import Foundation
 
 /// Enumeration of supported polling interval options.
-public enum PollingInterval: Equatable {
+public enum PollingInterval: Equatable, Sendable {
     /// Represents an interval of 10 seconds
     case short
     /// Represents an interval of 30 seconds

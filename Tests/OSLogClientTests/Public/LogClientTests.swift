@@ -6,7 +6,9 @@
 //
 
 import XCTest
-@testable import OSLogClient
+@testable @preconcurrency import OSLogClient
+
+extension OSLogStore: @unchecked @retroactive Sendable {}
 
 final class LogClientTests: XCTestCase {
 

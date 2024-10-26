@@ -5,11 +5,16 @@
 //  Created by Joshua Asbury on 24/8/2024.
 //
 
-public class InMemoryLastProcessedStrategy: LastProcessedStrategy {
+public final class InMemoryLastProcessedStrategy: LastProcessedStrategy, Equatable, @unchecked Sendable {
+
     public var date: Date?
 
     public func setLastProcessedDate(_ date: Date?) {
         self.date = date
+    }
+
+    public static func == (lhs: InMemoryLastProcessedStrategy, rhs: InMemoryLastProcessedStrategy) -> Bool {
+        lhs.date == rhs.date
     }
 }
 
