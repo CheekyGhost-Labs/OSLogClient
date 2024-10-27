@@ -28,7 +28,7 @@ jobs:
       matrix:
         os: [macos-15]
         destination: ["platform=macOS", "name=iPhone 16", "name=iPad Pro 13-inch (M4)", "name=Apple Watch SE (44mm) (2nd generation)", "name=Apple Tv 4K (3rd Generation)", "name=Apple Vision Pro"]
-		destinationName: ["macOS", "iOS", "iPadOS", "AppleWatch", "AppleTv", "AppleVisionPro"]
+        destinationName: ["macOS", "iOS", "iPadOS", "AppleWatch", "AppleTv", "AppleVisionPro"]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: maxim-lobanov/setup-xcode@v1
