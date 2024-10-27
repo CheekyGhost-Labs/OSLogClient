@@ -10,12 +10,12 @@ import OSLog
 import XCTest
 
 final class OSLogClientIntegration: XCTestCase {
-    let subsystem = "com.cheekyghost.OSLogClient.tests"
-    let logCategory = "tests"
+    let subsystem = "com.cheekyghost.OSLogClient.int-tests"
+    let logCategory = "int-tests"
     var logClient: LogClient!
     let pollingInterval: PollingInterval = .custom(1)
-    let lastProcessedStrategy: LastProcessedStrategy = .userDefaults(key: "com.cheekyghost.OSLogClient.test-processed")
-    let logger: Logger = .init(subsystem: "com.cheekyghost.OSLogClient.tests", category: "tests")
+    let lastProcessedStrategy: LastProcessedStrategy = .userDefaults(key: "com.cheekyghost.OSLogClient.int-test-processed")
+    let logger: Logger = .init(subsystem: "com.cheekyghost.OSLogClient.int-tests", category: "int-tests")
 
     var needsSetup: Bool = true
 
@@ -48,7 +48,15 @@ final class OSLogClientIntegration: XCTestCase {
     }
 
     func makeLogDriverSpy(id: String) -> LogDriverSpy {
-        LogDriverSpy(id: id, logFilters: [.subsystem("com.cheekyghost.OSLogClient.tests")])
+        LogDriverSpy(id: id, logFilters: [.subsystem("com.cheekyghost.OSLogClient.int-tests"), .category("int-tests")])
+    }
+
+    func waitForSpyProcess(spy: LogDriverSpy) async {
+        let expec = expectation(description: "async-wait")
+        spy.parameterQueue.async(flags: .barrier) {
+            expec.fulfill()
+        }
+        await fulfillment(of: [expec], timeout: 2)
     }
 
     // MARK: - Tests: General
@@ -69,14 +77,6 @@ final class OSLogClientIntegration: XCTestCase {
         await XCTAssertFalse_async(await OSLogClient.isEnabled)
     }
 
-    func waitForAsync() async {
-        let expec = expectation(description: "async-wait")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            expec.fulfill()
-        }
-        await fulfillment(of: [expec], timeout: 2)
-    }
-
     // MARK: - Standard
 
     func test_standard_willReceiveExpectedLogs() async throws {
@@ -94,9 +94,9 @@ final class OSLogClientIntegration: XCTestCase {
         logger.critical("\(logSet.logs[6])")
         logger.fault("\(logSet.logs[7])")
         logger.log(level: .error, "\(logSet.logs[8])")
-        await waitForAsync()
         // Wait for next polls
         await waitForNextPoll()
+        await waitForSpyProcess(spy: logDriverSpy)
         // Filter by log id (should be only returned set, but for brevity)
         let filteredLogs = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSet.groupId.uuidString) }
         XCTAssertEqual(filteredLogs.count, 9)
@@ -162,9 +162,9 @@ final class OSLogClientIntegration: XCTestCase {
         logger.trace("\(logSet.logs[0])")
         logger.info("\(logSet.logs[1])")
         logger.error("\(logSet.logs[2])")
-        await waitForAsync()
         // Wait for next poll
-        await waitForNextPoll(count: 2)
+        await waitForNextPoll()
+        await waitForSpyProcess(spy: logDriverSpy)
         // Filter by log id (should be only returned set, but for brevity)
         let filteredLogs = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSet.groupId.uuidString) }
         XCTAssertEqual(filteredLogs.count, 3)
@@ -186,13 +186,14 @@ final class OSLogClientIntegration: XCTestCase {
         // Reset spy
         logDriverSpy.reset()
         // Wait for next poll
-        await waitForNextPoll(count: 2)
+        await waitForNextPoll()
         // Make new logs
         let logSetTwo = makeLogSet(count: 2)
         logger.trace("\(logSetTwo.logs[0])")
         logger.info("\(logSetTwo.logs[1])")
         // Wait for next poll
-        await waitForNextPoll(count: 2)
+        await waitForNextPoll()
+        await waitForSpyProcess(spy: logDriverSpy)
         // Filter by log id (should be only returned set, but for brevity)
         let filteredLogsTwo = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSetTwo.groupId.uuidString) }
         XCTAssertEqual(filteredLogsTwo.count, 2)
@@ -221,11 +222,11 @@ final class OSLogClientIntegration: XCTestCase {
         logger.trace("\(logSet.logs[0])")
         logger.info("\(logSet.logs[1])")
         logger.error("\(logSet.logs[2])")
-        await waitForAsync()
         // Assert
         XCTAssertFalse(logDriverSpy.processLogCalled)
         await OSLogClient.startPolling()
         await waitForNextPoll()
+        await waitForSpyProcess(spy: logDriverSpy)
         // Filter by log id (should be only returned set, but for brevity)
         let filteredLogs = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSet.groupId.uuidString) }
         XCTAssertEqual(filteredLogs.count, 3)
@@ -257,13 +258,13 @@ final class OSLogClientIntegration: XCTestCase {
         logger.trace("\(logSet.logs[0])")
         logger.info("\(logSet.logs[1])")
         logger.error("\(logSet.logs[2])")
-        await waitForAsync()
         // Assert
         XCTAssertFalse(logDriverSpy.processLogCalled)
         await OSLogClient._client.logClient.setLastProcessedDate(pointInTime)
         await OSLogClient.pollImmediately(from: pointInTime)
+        await waitForSpyProcess(spy: logDriverSpy)
         // Filter by log id (should be only returned set, but for brevity)
-        let filteredLogs = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSet.groupId.uuidString) }
+        let filteredLogs = logDriverSpy.processLogParameterList.filter{ $0.category == logCategory && $0.message.contains(logSet.groupId.uuidString) }
         XCTAssertEqual(filteredLogs.count, 3)
         // Trace
         XCTAssertEqual(filteredLogs[0].level, .debug)
@@ -300,8 +301,8 @@ final class OSLogClientIntegration: XCTestCase {
         logger.trace("\(logSet.logs[0])")
         logger.info("\(logSet.logs[1])")
         logger.error("\(logSet.logs[2])")
-        await waitForAsync()
         await waitForNextPoll()
+        await waitForSpyProcess(spy: logDriverSpy)
         // Filter by log id (should be only returned set, but for brevity)
         let filteredLogs = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSet.groupId.uuidString) }
         XCTAssertEqual(filteredLogs.count, 3)
@@ -329,9 +330,9 @@ final class OSLogClientIntegration: XCTestCase {
         let logSetTwo = makeLogSet(count: 2)
         logger.trace("\(logSetTwo.logs[0])")
         logger.info("\(logSetTwo.logs[1])")
-        await waitForAsync()
         // Poll now
         await OSLogClient.pollImmediately()
+        await waitForSpyProcess(spy: logDriverSpy)
         // Filter by log id (should be only returned set, but for brevity)
         let filteredLogsTwo = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSetTwo.groupId.uuidString) }
         XCTAssertEqual(filteredLogsTwo.count, 2)
@@ -356,7 +357,7 @@ final class OSLogClientIntegration: XCTestCase {
     }
 
     func test_pollImmediately_whileNotPolling_fromSpecificDate_willReceiveExpectedLogs() async throws {
-        let logDriverSpy = makeLogDriverSpy(id: "test")
+        let logDriverSpy = makeLogDriverSpy(id: #function)
         await logClient.registerDriver(logDriverSpy)
         let logSet = makeLogSet(count: 3)
         let pointInTime = Date().addingTimeInterval(-1) // Now minus a second (want a past date but within this test context)
@@ -365,11 +366,11 @@ final class OSLogClientIntegration: XCTestCase {
         logger.trace("\(logSet.logs[0])")
         logger.info("\(logSet.logs[1])")
         logger.error("\(logSet.logs[2])")
-        await waitForAsync()
         // Assert
         XCTAssertFalse(logDriverSpy.processLogCalled)
         await OSLogClient.pollImmediately(from: pointInTime)
         await waitForNextPoll()
+        await waitForSpyProcess(spy: logDriverSpy)
         // Filter by log id (should be only returned set, but for brevity)
         let filteredLogs = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSet.groupId.uuidString) }
         XCTAssertEqual(filteredLogs.count, 3)
@@ -410,6 +411,6 @@ final class OSLogClientIntegration: XCTestCase {
         XCTAssertEqual(filteredLogsTwo[2].category, logCategory)
         XCTAssertEqual(filteredLogsTwo[2].message, logSet.logs[2])
         // Deregister
-        await logClient.deregisterDriver(withId: "test")
+        await logClient.deregisterDriver(withId: #function)
     }
 }

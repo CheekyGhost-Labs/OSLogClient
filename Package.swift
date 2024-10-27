@@ -28,5 +28,9 @@ let package = Package(
             name: "OSLogClientTests",
             dependencies: ["OSLogClient"]
         ),
+        .testTarget(
+            name: "OSLogClientIntegrationTests",
+            dependencies: ["OSLogClient"]
+        ),
     ]
 )
