@@ -66,7 +66,7 @@ jobs:
         swift: ["5.9", "5.8", "5.7"]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: swift-actions/setup-swift@v1
+      - uses: SwiftyLab/setup-swift@latest
         with:
           swift-version: ${{ matrix.swift }}
       - uses: maxim-lobanov/setup-xcode@v1
