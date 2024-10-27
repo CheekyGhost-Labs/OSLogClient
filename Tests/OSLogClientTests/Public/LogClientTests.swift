@@ -6,7 +6,11 @@
 //
 
 import XCTest
-@testable import OSLogClient
+@testable @preconcurrency import OSLogClient
+
+#if swift(>=6.0)
+extension OSLogStore: @unchecked @retroactive Sendable {}
+#endif
 
 final class LogClientTests: XCTestCase {
 

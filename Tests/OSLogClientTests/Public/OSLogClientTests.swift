@@ -6,7 +6,7 @@
 //
 
 import XCTest
-import OSLog
+@preconcurrency import OSLog
 @testable import OSLogClient
 
 final class OSLogClientTests: XCTestCase {
@@ -24,7 +24,8 @@ final class OSLogClientTests: XCTestCase {
     var logClient: LogClient!
     var testProcessInfoProvider: TestProcessInfoProvider!
 
-    override func setUpWithError() throws {
+    override func setUp() async throws {
+        try await super.setUp()
         logStore = try OSLogStore(scope: .currentProcessIdentifier)
         logDriverSpy = LogDriverSpy(id: "test")
         logDriverSpyTwo = LogDriverSpy(id: "test-two")
@@ -37,11 +38,11 @@ final class OSLogClientTests: XCTestCase {
             logger: logger,
             processInfoEnvironmentProvider: testProcessInfoProvider
         )
-        OSLogClient._client = logClient
+        await OSLogClient._client.setLogClient(logClient)
     }
 
-    override func tearDownWithError() throws {
-        try super.tearDownWithError()
+    override func tearDown() async throws {
+        try await super.tearDown()
         logClient = nil
         logDriverSpy = nil
         logDriverSpyTwo = nil
@@ -49,8 +50,8 @@ final class OSLogClientTests: XCTestCase {
 
     // MARK: - Helpers
 
-    func test_pollingIntervalGetter_willReturnClientValue() {
-        XCTAssertEqual(OSLogClient.pollingInterval, pollingInterval)
+    func test_pollingIntervalGetter_willReturnClientValue() async {
+        await XCTAssertEqual_async(await OSLogClient.pollingInterval, pollingInterval)
     }
 
     // MARK: - Tests: Is Polling Helper
@@ -105,14 +106,14 @@ final class OSLogClientTests: XCTestCase {
 
     // MARK: - Tests: Is Initialized
 
-    func test_isInitialized_validClient_willReturnTrue() {
-        OSLogClient._client = logClient
-        XCTAssertTrue(OSLogClient.isInitialized)
+    func test_isInitialized_validClient_willReturnTrue() async {
+        await OSLogClient._client.setLogClient(logClient)
+        await XCTAssertTrue_async(await OSLogClient.isInitialized)
     }
 
-    func test_isInitialized_noClient_willReturnFalse() {
-        OSLogClient._client = nil
-        XCTAssertFalse(OSLogClient.isInitialized)
+    func test_isInitialized_noClient_willReturnFalse() async {
+        await OSLogClient._client.setLogClient(nil)
+        await XCTAssertFalse_async(await OSLogClient.isInitialized)
     }
 
     // MARK: - Tests: Helpers
@@ -144,17 +145,20 @@ final class OSLogClientTests: XCTestCase {
         await OSLogClient.setPollingInterval(.custom(123))
 
         // Then
-        XCTAssertFalse(OSLogClient._client === lastClient)
-        await XCTAssertEqual_async(await OSLogClient._client?.pollingInterval, .custom(123))
-        await XCTAssertTrue_async(type(of: await OSLogClient._client?.lastProcessedStrategy) == type(of: await lastClient?.lastProcessedStrategy))
+        await XCTAssertFalse_async(await OSLogClient._client.logClient === lastClient)
+        await XCTAssertEqual_async(await OSLogClient.pollingInterval, .custom(123))
         await XCTAssertEqual_async(
-            await OSLogClient._client?.lastProcessedDate?.timeIntervalSince1970,
+            await OSLogClient.lastProcessedStrategy as? InMemoryLastProcessedStrategy,
+            await lastClient?.lastProcessedStrategy as? InMemoryLastProcessedStrategy
+        )
+        await XCTAssertEqual_async(
+            await OSLogClient.lastProcessedDate?.timeIntervalSince1970,
             await lastClient?.lastProcessedDate?.timeIntervalSince1970
         )
-        await XCTAssertEqual_async(await OSLogClient._client?.isEnabled, await lastClient?.isEnabled)
-        await XCTAssertEqual_async(await OSLogClient._client?.shouldPauseIfNoRegisteredDrivers, await lastClient?.shouldPauseIfNoRegisteredDrivers)
-        await XCTAssertTrue_async(await OSLogClient._client?.logStore === lastClient?.logStore)
-        await XCTAssertTrue_async(await OSLogClient._client?.processInfoEnvironmentProvider === lastClient?.processInfoEnvironmentProvider)
+        await XCTAssertEqual_async(await OSLogClient.isEnabled, await lastClient?.isEnabled)
+        await XCTAssertEqual_async(await OSLogClient.shouldPauseIfNoRegisteredDrivers, await lastClient?.shouldPauseIfNoRegisteredDrivers)
+        await XCTAssertTrue_async(await OSLogClient._client.logClient.logStore === lastClient?.logStore)
+        await XCTAssertTrue_async(await OSLogClient._client.logClient.processInfoEnvironmentProvider === lastClient?.processInfoEnvironmentProvider)
     }
 
     // MARK: - Tests: Polling Immediately

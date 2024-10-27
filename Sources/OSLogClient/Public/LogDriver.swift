@@ -11,11 +11,11 @@ import OSLog
 /// `LogDriver` instances are responsible for handling processed os logs.
 /// Instances, when registered with the ``OSLogClient`` instance, will be sent logs from the `OSLogStore`.
 /// If  ``LogFilter``s are provided any incoming logs will be assessed against the filter rules and ignored if no matches are found.
-open class LogDriver: Equatable {
+open class LogDriver: Equatable, @unchecked Sendable {
     // MARK: - Supplementary
 
     /// Enumeration of supported log levels.
-    @frozen public enum LogLevel: String, CaseIterable {
+    @frozen public enum LogLevel: String, CaseIterable, Sendable {
         /// The log level was never specified.
         case undefined
         /// A log level that captures diagnostic information.

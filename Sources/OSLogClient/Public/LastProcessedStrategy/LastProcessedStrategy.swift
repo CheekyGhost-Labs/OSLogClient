@@ -8,7 +8,7 @@
 import Foundation
 
 /// Enumeration of supported strategies for storing and updating the `Date` the log store was last successfully queried and processed.
-public protocol LastProcessedStrategy {
+public protocol LastProcessedStrategy: Sendable {
     /// The most recent `Date` of a processed/polled log
     var date: Date? { get }
 

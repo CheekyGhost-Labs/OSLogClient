@@ -7,8 +7,37 @@
 
 import Foundation
 
-public struct UserDefaultsLastProcessedStrategy: LastProcessedStrategy {
-    let defaults: UserDefaults
+final class SendableUserDefaults: @unchecked Sendable {
+
+    var target: UserDefaults
+
+    init(_ target: UserDefaults) {
+        self.target = target
+    }
+
+    func setValue(_ value: Any?, forKey key: String) {
+        target.set(value, forKey: key)
+    }
+
+    func value(forKey key: String) -> Any? {
+        target.value(forKey: key)
+    }
+
+    func removeObject(forKey defaultName: String) {
+        target.removeObject(forKey: defaultName)
+    }
+}
+
+public struct UserDefaultsLastProcessedStrategy: LastProcessedStrategy, Equatable, Sendable {
+
+    // MARK: - Properties
+
+    var sendableDefaults: SendableUserDefaults
+
+    var defaults: UserDefaults {
+        sendableDefaults.target
+    }
+
     let key: String
 
     public var date: Date? {
@@ -18,9 +47,11 @@ public struct UserDefaultsLastProcessedStrategy: LastProcessedStrategy {
         return Date(timeIntervalSince1970: timestamp)
     }
 
+    // MARK: - Lifecycle
+
     public init(key: String, defaults: UserDefaults = .standard) {
         self.key = key
-        self.defaults = defaults
+        self.sendableDefaults = SendableUserDefaults(defaults)
     }
 
     public mutating func setLastProcessedDate(_ date: Date?) {
@@ -29,6 +60,10 @@ public struct UserDefaultsLastProcessedStrategy: LastProcessedStrategy {
         } else {
             defaults.removeObject(forKey: key)
         }
+    }
+
+    public static func == (lhs: UserDefaultsLastProcessedStrategy, rhs: UserDefaultsLastProcessedStrategy) -> Bool {
+        lhs.date == rhs.date
     }
 }
 
