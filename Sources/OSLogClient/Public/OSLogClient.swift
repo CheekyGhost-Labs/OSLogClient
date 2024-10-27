@@ -43,8 +43,6 @@ public actor OSLogClient {
     }
 
     /// The underlying log client belonging to the shared instance.
-    /// Note: This is marked as `nonisolated(unsafe)` to avoid an error when getting the immutable `pollingInterval`.
-    /// The instance is used correctly within the OSLogClient setup.
     var _logClient: LogClient?
 
     // MARK: - Lifecycle
