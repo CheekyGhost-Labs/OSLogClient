@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2024-27-10
+
+- Added explicit Swift 6 language version and mode support [@mobrien-ghost](https://github.com/CheekyGhost-Labs/OSLogClient/pull/22)
+- Dropped Swift 5.7 support [@mobrien-ghost](https://github.com/CheekyGhost-Labs/OSLogClient/pull/22)
+- Added Swift 6 -> 5.8 unit test actions [@mobrien-ghost](https://github.com/CheekyGhost-Labs/OSLogClient/pull/23)
+- Added iOS, macOS, iPadOS, watchOS, tvOS, VisionPro integration tests [@mobrien-ghost](https://github.com/CheekyGhost-Labs/OSLogClient/pull/23)
+
 ## [1.2.0] - 2024-08-09
 
 - Add frozen to LogLevel enum [@theoriginalbit #21](https://github.com/CheekyGhost-Labs/OSLogClient/pull/21)
