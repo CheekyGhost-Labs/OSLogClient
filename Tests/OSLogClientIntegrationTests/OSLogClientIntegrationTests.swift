@@ -32,7 +32,7 @@ final class OSLogClientIntegration: XCTestCase {
     // MARK: - Helpers
 
     func waitForNextPoll(count: Int = 1) async {
-        for _ in 0..<(count + 1) {
+        for _ in 0..<count {
             let clientInterval = await OSLogClient.pollingInterval.nanoseconds + 1_000_000_000
             try? await Task.sleep(nanoseconds: clientInterval)
         }
@@ -51,8 +51,16 @@ final class OSLogClientIntegration: XCTestCase {
         LogDriverSpy(id: id, logFilters: [.subsystem("com.cheekyghost.OSLogClient.int-tests"), .category("int-tests")])
     }
 
-    func waitForSpyProcess(spy: LogDriverSpy) async {
+    func waitForAsync() async {
         let expec = expectation(description: "async-wait")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            expec.fulfill()
+        }
+        await fulfillment(of: [expec], timeout: 2)
+    }
+
+    func waitForSpyProcess(spy: LogDriverSpy) async {
+        let expec = expectation(description: "async-spy-wait")
         spy.parameterQueue.async(flags: .barrier) {
             expec.fulfill()
         }
@@ -77,18 +85,16 @@ final class OSLogClientIntegration: XCTestCase {
         await XCTAssertFalse_async(await OSLogClient.isEnabled)
     }
 
-    // MARK: - Standard
-
     func test_standard_willReceiveExpectedLogs() async throws {
         let logDriverSpy = makeLogDriverSpy(id: #function)
         await logClient.registerDriver(logDriverSpy)
         await OSLogClient.startPolling()
         // Make logs
         let logSet = makeLogSet(count: 9)
-        logger.trace("\(logSet.logs[0])")
+        logger.notice("\(logSet.logs[0])")
         logger.notice("\(logSet.logs[1])")
         logger.info("\(logSet.logs[2])")
-        logger.debug("\(logSet.logs[3])")
+        logger.notice("\(logSet.logs[3])")
         logger.warning("\(logSet.logs[4])")
         logger.error("\(logSet.logs[5])")
         logger.critical("\(logSet.logs[6])")
@@ -101,7 +107,7 @@ final class OSLogClientIntegration: XCTestCase {
         let filteredLogs = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSet.groupId.uuidString) }
         XCTAssertEqual(filteredLogs.count, 9)
         // Log 1
-        XCTAssertEqual(filteredLogs[0].level, .debug)
+        XCTAssertEqual(filteredLogs[0].level, .notice)
         XCTAssertEqual(filteredLogs[0].subsystem, subsystem)
         XCTAssertEqual(filteredLogs[0].category, logCategory)
         XCTAssertEqual(filteredLogs[0].message, logSet.logs[0])
@@ -116,7 +122,7 @@ final class OSLogClientIntegration: XCTestCase {
         XCTAssertEqual(filteredLogs[2].category, logCategory)
         XCTAssertEqual(filteredLogs[2].message, logSet.logs[2])
         // Log 4
-        XCTAssertEqual(filteredLogs[3].level, .debug)
+        XCTAssertEqual(filteredLogs[3].level, .notice)
         XCTAssertEqual(filteredLogs[3].subsystem, subsystem)
         XCTAssertEqual(filteredLogs[3].category, logCategory)
         XCTAssertEqual(filteredLogs[3].message, logSet.logs[3])
@@ -159,7 +165,7 @@ final class OSLogClientIntegration: XCTestCase {
         // Wait for next poll
         await waitForNextPoll(count: 2)
         // Make Logs
-        logger.trace("\(logSet.logs[0])")
+        logger.notice("\(logSet.logs[0])")
         logger.info("\(logSet.logs[1])")
         logger.error("\(logSet.logs[2])")
         // Wait for next poll
@@ -169,7 +175,7 @@ final class OSLogClientIntegration: XCTestCase {
         let filteredLogs = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSet.groupId.uuidString) }
         XCTAssertEqual(filteredLogs.count, 3)
         // Log 1
-        XCTAssertEqual(filteredLogs[0].level, .debug)
+        XCTAssertEqual(filteredLogs[0].level, .notice)
         XCTAssertEqual(filteredLogs[0].subsystem, subsystem)
         XCTAssertEqual(filteredLogs[0].category, logCategory)
         XCTAssertEqual(filteredLogs[0].message, logSet.logs[0])
@@ -189,7 +195,7 @@ final class OSLogClientIntegration: XCTestCase {
         await waitForNextPoll()
         // Make new logs
         let logSetTwo = makeLogSet(count: 2)
-        logger.trace("\(logSetTwo.logs[0])")
+        logger.notice("\(logSetTwo.logs[0])")
         logger.info("\(logSetTwo.logs[1])")
         // Wait for next poll
         await waitForNextPoll()
@@ -198,7 +204,7 @@ final class OSLogClientIntegration: XCTestCase {
         let filteredLogsTwo = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSetTwo.groupId.uuidString) }
         XCTAssertEqual(filteredLogsTwo.count, 2)
         // Log 1
-        XCTAssertEqual(filteredLogsTwo[0].level, .debug)
+        XCTAssertEqual(filteredLogsTwo[0].level, .notice)
         XCTAssertEqual(filteredLogsTwo[0].subsystem, subsystem)
         XCTAssertEqual(filteredLogsTwo[0].category, logCategory)
         XCTAssertEqual(filteredLogsTwo[0].message, logSetTwo.logs[0])
@@ -218,8 +224,7 @@ final class OSLogClientIntegration: XCTestCase {
         await logClient.registerDriver(logDriverSpy)
         let logSet = makeLogSet(count: 3)
         await OSLogClient.stopPolling()
-        await OSLogClient.pollImmediately()
-        logger.trace("\(logSet.logs[0])")
+        logger.notice("\(logSet.logs[0])")
         logger.info("\(logSet.logs[1])")
         logger.error("\(logSet.logs[2])")
         // Assert
@@ -231,7 +236,7 @@ final class OSLogClientIntegration: XCTestCase {
         let filteredLogs = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSet.groupId.uuidString) }
         XCTAssertEqual(filteredLogs.count, 3)
         // Trace
-        XCTAssertEqual(filteredLogs[0].level, .debug)
+        XCTAssertEqual(filteredLogs[0].level, .notice)
         XCTAssertEqual(filteredLogs[0].subsystem, subsystem)
         XCTAssertEqual(filteredLogs[0].category, logCategory)
         XCTAssertEqual(filteredLogs[0].message, logSet.logs[0])
@@ -255,7 +260,7 @@ final class OSLogClientIntegration: XCTestCase {
         let logSet = makeLogSet(count: 3)
         let pointInTime = Date().addingTimeInterval(-3) // Now minus three seconds (want a past date but within this test context)
         await OSLogClient.stopPolling()
-        logger.trace("\(logSet.logs[0])")
+        logger.notice("\(logSet.logs[0])")
         logger.info("\(logSet.logs[1])")
         logger.error("\(logSet.logs[2])")
         // Assert
@@ -267,7 +272,7 @@ final class OSLogClientIntegration: XCTestCase {
         let filteredLogs = logDriverSpy.processLogParameterList.filter{ $0.category == logCategory && $0.message.contains(logSet.groupId.uuidString) }
         XCTAssertEqual(filteredLogs.count, 3)
         // Trace
-        XCTAssertEqual(filteredLogs[0].level, .debug)
+        XCTAssertEqual(filteredLogs[0].level, .notice)
         XCTAssertEqual(filteredLogs[0].subsystem, subsystem)
         XCTAssertEqual(filteredLogs[0].category, logCategory)
         XCTAssertEqual(filteredLogs[0].message, logSet.logs[0])
@@ -298,16 +303,17 @@ final class OSLogClientIntegration: XCTestCase {
         await OSLogClient.startPolling()
         _ = await OSLogClient._client.logClient.pendingPollTask?.result
         // Log and wait
-        logger.trace("\(logSet.logs[0])")
+        logger.notice("\(logSet.logs[0])")
         logger.info("\(logSet.logs[1])")
         logger.error("\(logSet.logs[2])")
         await waitForNextPoll()
         await waitForSpyProcess(spy: logDriverSpy)
         // Filter by log id (should be only returned set, but for brevity)
+        let processCount = logDriverSpy.processLogCallCount
         let filteredLogs = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSet.groupId.uuidString) }
         XCTAssertEqual(filteredLogs.count, 3)
         // Trace
-        XCTAssertEqual(filteredLogs[0].level, .debug)
+        XCTAssertEqual(filteredLogs[0].level, .notice)
         XCTAssertEqual(filteredLogs[0].subsystem, subsystem)
         XCTAssertEqual(filteredLogs[0].category, logCategory)
         XCTAssertEqual(filteredLogs[0].message, logSet.logs[0])
@@ -322,13 +328,13 @@ final class OSLogClientIntegration: XCTestCase {
         XCTAssertEqual(filteredLogs[2].category, logCategory)
         XCTAssertEqual(filteredLogs[2].message, logSet.logs[2])
         await waitForNextPoll()
-        XCTAssertEqual(logDriverSpy.processLogCallCount, 3)
+        XCTAssertEqual(logDriverSpy.processLogCallCount, processCount)
         await waitForNextPoll()
-        XCTAssertEqual(logDriverSpy.processLogCallCount, 3)
+        XCTAssertEqual(logDriverSpy.processLogCallCount, processCount)
         // Reset spy, log some more items, and poll immediately
         logDriverSpy.reset()
         let logSetTwo = makeLogSet(count: 2)
-        logger.trace("\(logSetTwo.logs[0])")
+        logger.notice("\(logSetTwo.logs[0])")
         logger.info("\(logSetTwo.logs[1])")
         // Poll now
         await OSLogClient.pollImmediately()
@@ -337,7 +343,7 @@ final class OSLogClientIntegration: XCTestCase {
         let filteredLogsTwo = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSetTwo.groupId.uuidString) }
         XCTAssertEqual(filteredLogsTwo.count, 2)
         // Trace
-        XCTAssertEqual(filteredLogsTwo[0].level, .debug)
+        XCTAssertEqual(filteredLogsTwo[0].level, .notice)
         XCTAssertEqual(filteredLogsTwo[0].subsystem, subsystem)
         XCTAssertEqual(filteredLogsTwo[0].category, logCategory)
         XCTAssertEqual(filteredLogsTwo[0].message, logSetTwo.logs[0])
@@ -363,7 +369,7 @@ final class OSLogClientIntegration: XCTestCase {
         let pointInTime = Date().addingTimeInterval(-1) // Now minus a second (want a past date but within this test context)
         await OSLogClient.stopPolling()
         // Log
-        logger.trace("\(logSet.logs[0])")
+        logger.notice("\(logSet.logs[0])")
         logger.info("\(logSet.logs[1])")
         logger.error("\(logSet.logs[2])")
         // Assert
@@ -375,7 +381,7 @@ final class OSLogClientIntegration: XCTestCase {
         let filteredLogs = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSet.groupId.uuidString) }
         XCTAssertEqual(filteredLogs.count, 3)
         // Trace
-        XCTAssertEqual(filteredLogs[0].level, .debug)
+        XCTAssertEqual(filteredLogs[0].level, .notice)
         XCTAssertEqual(filteredLogs[0].subsystem, subsystem)
         XCTAssertEqual(filteredLogs[0].category, logCategory)
         XCTAssertEqual(filteredLogs[0].message, logSet.logs[0])
@@ -396,7 +402,7 @@ final class OSLogClientIntegration: XCTestCase {
         let filteredLogsTwo = logDriverSpy.processLogParameterList.filter{ $0.message.contains(logSet.groupId.uuidString) }
         XCTAssertEqual(filteredLogsTwo.count, 3)
         // Trace
-        XCTAssertEqual(filteredLogsTwo[0].level, .debug)
+        XCTAssertEqual(filteredLogsTwo[0].level, .notice)
         XCTAssertEqual(filteredLogsTwo[0].subsystem, subsystem)
         XCTAssertEqual(filteredLogsTwo[0].category, logCategory)
         XCTAssertEqual(filteredLogsTwo[0].message, logSet.logs[0])

@@ -83,3 +83,23 @@ jobs:
         run: swift build
       - name: Run tests
         run: swift test --filter OSLogClientTests
+  ios_tests_latest:
+    name: Integration Tests: iOS
+    runs-on: macos-15
+    steps:
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "16.0"
+      - uses: actions/checkout@v3
+      - uses: actions/cache@v3
+        with:
+          path: .build
+          key: macos-15-spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: |
+            macos-15-spm-
+
+      - name: Build
+        run: xcodebuild build-for-testing -scheme OSLogClientIntegrationTests -destination "name=iPhone 16"
+
+      - name: Test
+        run: xcodebuild test -scheme OSLogClientIntegrationTests -destination "name=iPhone 16" -enableCodeCoverage YES
