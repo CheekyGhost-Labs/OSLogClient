@@ -6,7 +6,11 @@
 //
 
 import Foundation
+#if swift(<6.0)
+@preconcurrency import OSLog
+#else
 import OSLog
+#endif
 @testable import OSLogClient
 
 class LogDriverSpy: LogDriver, @unchecked Sendable {
@@ -20,7 +24,11 @@ class LogDriverSpy: LogDriver, @unchecked Sendable {
         var category: String
         var date: Date
         var message: String
+        #if swift(<6.0)
+        var components: [OSLogMessageComponent]
+        #else
         nonisolated(unsafe) var components: [OSLogMessageComponent]
+        #endif
     }
     var processLogCalled: Bool { processLogCallCount > 0 }
     var processLogCallCount: Int { processLogParameterList.count }
