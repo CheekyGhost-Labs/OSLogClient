@@ -30,7 +30,7 @@ jobs:
         with:
           xcode-version: "16.0"
       - uses: actions/checkout@v4
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
           path: .build
           key: macos-latest-spm-${{ hashFiles('**/Package.resolved') }}
@@ -48,7 +48,7 @@ jobs:
         with:
           xcode-version: "15.0"
       - uses: actions/checkout@v4
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
           path: .build
           key: macos-14-swift-510-spm-${{ hashFiles('**/Package.resolved') }}
@@ -73,7 +73,7 @@ jobs:
         with:
           xcode-version: "14.3.1"
       - uses: actions/checkout@v4
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
           path: .build
           key: ${{ matrix.os }}-${{ matrix.swift }}-spm-${{ hashFiles('**/Package.resolved') }}
@@ -95,7 +95,7 @@ jobs:
         with:
           xcode-version: "16.0"
       - uses: actions/checkout@v4
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         with:
           path: .build
           key: ${{ matrix.os }}-spm-${{ matrix.destinationName }}-${{ hashFiles('**/Package.resolved') }}
