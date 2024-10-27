@@ -23,7 +23,7 @@ on:
 
 jobs:
   integration_tests:
-    name: name: ${{ matrix.destination }} Integration Tests
+    name: ${{ matrix.destination }} Integration Tests
     strategy:
       matrix:
         os: [macos-15]
